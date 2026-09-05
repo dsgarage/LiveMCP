@@ -1,6 +1,6 @@
 {
   "name": "livemcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Ableton Live 内で完結する MCP サーバー（M4L デバイス内 node.script で動作）",
   "scripts": {

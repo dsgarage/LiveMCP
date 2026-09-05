@@ -46,16 +46,21 @@ Claude Code ←(会話)→ live.set.* ─→ scripts/als*.js ─→ .als ファ�
 
 （`create_audio_clip` は Live 12.0.5+、`replace_sample` は Live 12.4+ の LOM API を使用）
 
-## セットアップ
+## セットアップ（配布 zip から、約 1 分）
+
+[Releases](https://github.com/dsgarage/LiveMCP/releases/latest) の `LiveMCP-<version>.zip` を展開して:
 
 ```bash
-npm --prefix server install
-npm run install-device                                              # ビルドして User Library へ導入
-claude mcp add --transport http live-mcp http://localhost:3360/mcp  # Claude Code に登録
+sh install.sh
 ```
 
-Live のブラウザから **User Library → Presets → Audio Effects → Max Audio Effect → LiveMCP** をトラックへ置き、Claude Code で `live.status` が返れば完了です。
-詳細と注意点（Max のキャッシュ、サンプルフォルダ）は [セットアップ](https://github.com/dsgarage/LiveMCP/wiki/Setup)、動かないときは [トラブルシューティング](https://github.com/dsgarage/LiveMCP/wiki/Troubleshooting)。
+これで `.amxd` と 2 つの `.js` が Live の User Library と Max の検索パスへ配置され、LiveMCP を載せた**テンプレートセット**が `User Library/Templates/LiveMCP.als` に入り、Claude Code に `live-mcp` が登録されます（Claude Code が無ければコマンドを表示）。
+
+1. Live を再起動する
+2. ブラウザ → **User Library → Templates → LiveMCP** から新規セットを作る（既存のセットでは Presets → Audio Effects → Max Audio Effect → LiveMCP をトラックへ）
+3. Claude Code で `live.status` が返れば接続完了
+
+ソースから導入する場合は `npm --prefix server install && npm run install-device`。詳細と注意点は [セットアップ](https://github.com/dsgarage/LiveMCP/wiki/Setup)、動かないときは [トラブルシューティング](https://github.com/dsgarage/LiveMCP/wiki/Troubleshooting)。
 
 ## 開発
 

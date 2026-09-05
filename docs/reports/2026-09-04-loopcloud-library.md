@@ -184,6 +184,9 @@ SONGS（グループ）        シーン = 曲（番号順）。シーンに曲�
 - Simpler の `SampleEnd` / `SustainLoop.End` はフレーム数 − 1
 - `ClipSlotList` は MainSequencer と FreezeSequencer で 2 回出る
 - `LomId` は 0 でよい。`OriginalCrc` が 0 でも Live は開く
+- **テンポは `<Tempo>` の `Manual` だけでは変わらない。** 実物には MainTrack の AutomationEnvelope にテンポの初期値
+  （`FloatEvent Time="-63072000" Value="155"`）が残っていて、Live はこちらを表示する。両方を書き換える（`als.setTempo`）。
+  2026-09-05 にテンプレートセットで発覚し、それまでの生成物は Live 上では全部 155 だった → 全セット作り直し
 - 分類の `Kit` は曲単位のコンストラクションキット（ループ）が大半。ドラム系パック（Loopcloud Drum 等）の Kit だけがワンショット
 
 ### 実機で初めて分かったこと

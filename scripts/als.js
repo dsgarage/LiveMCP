@@ -260,7 +260,24 @@ function writeAlsWithBackup(file, xml, now = new Date()) {
   return backup;
 }
 
-module.exports = { readAls, writeAls, writeAlsWithBackup, backupPath, verifyRoundTrip, creatorOf, listTracks, replaceInTrack, renameTrack, groupTracks, countScenes, nextPointeeId, setTemplates, resolveTrackTargets };
+// セットのテンポを書き換える。<Tempo> の Manual だけでなく、テンポのオートメーション初期値
+// （MainTrack の AutomationEnvelope で PointeeId が Tempo の AutomationTarget と同じもの。
+// Live はこちらを優先して表示する）も同じ値にする。実物（Hard Drops.als）にはこの初期値 155 が残っていて、
+// Manual だけ変えても Live 上のテンポが 155 のままだった
+function setTempo(xml, bpm) {
+  const tempo = /(<Tempo>\s*<LomId Value="0" \/>\s*<Manual Value=")[^"]*(" \/>)/;
+  if (!tempo.test(xml)) throw new Error("<Tempo> が見つかりません");
+  xml = xml.replace(tempo, `$1${bpm}$2`);
+  const block = /<Tempo>[\s\S]*?<\/Tempo>/.exec(xml)[0];
+  const target = /<AutomationTarget Id="(\d+)">/.exec(block);
+  if (target) {
+    const env = new RegExp(`(<PointeeId Value="${target[1]}" \\/>\\s*</EnvelopeTarget>\\s*<Automation>\\s*<Events>\\s*<FloatEvent Id="\\d+" Time="-63072000" Value=")[^"]*(")`);
+    xml = xml.replace(env, `$1${bpm}$2`);
+  }
+  return xml;
+}
+
+module.exports = { readAls, writeAls, writeAlsWithBackup, backupPath, verifyRoundTrip, creatorOf, listTracks, replaceInTrack, renameTrack, groupTracks, countScenes, nextPointeeId, setTemplates, resolveTrackTargets, setTempo };
 
 if (require.main === module) {
   const file = process.argv[2];
