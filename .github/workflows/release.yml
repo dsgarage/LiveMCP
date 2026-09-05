@@ -1,0 +1,30 @@
+name: release
+
+# v* タグを push すると配布 zip（.amxd / .js / テンプレートセット / install.sh）を作って Release に添付する
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm --prefix server ci
+      - run: npm test
+      - run: node scripts/package.js
+      - name: Release に添付（無ければ作る）
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --title "LiveMCP ${tag#v}" --generate-notes
+          fi
+          gh release upload "$tag" dist/*.zip --clobber

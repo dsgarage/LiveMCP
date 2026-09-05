@@ -45,13 +45,30 @@ async function notify(text, { level = "info" } = {}) {
   return shown;
 }
 
-// ログ本文から最後に読み込まれたユーザーのセットを拾う。
-// トラック追加などで Live 内部のテンプレートも読まれるので、それは除く。
+// ログ本文から「今開いているセット」を拾う。
+//
+// Live の Log.txt に出る並び（12.4.5 実機で確認）:
+//   セットを開く:      Begin/End ExchangeDocument → Loading document "X.als" → Begin/End ExchangeDocument
+//   新規セット(Cmd+N): Begin/End ExchangeDocument だけ（Loading document は出ない）
+//   起動:              Begin/End ExchangeDocument → Loading document "…/Builtin/Templates/DefaultLiveSet.als" → Begin/End ExchangeDocument
+//   トラック追加:      Loading document "…/Defaults/Creating Tracks/…/Default MIDI Track.als"（ExchangeDocument は出ない）
+//
+// なので、Live 内部のファイル（/Contents/App-Resources/）の読み込みは無視し、ユーザーのセットを読んだ後に
+// ExchangeDocument が 2 回以上出たら「別のセットに入れ替わった（新規・未保存）」として null にする。
 function parseCurrentDocument(text) {
-  const hits = [...text.matchAll(/Loading document "([^"]+\.als)"/g)]
-    .map((p) => p[1])
-    .filter((p) => !p.includes("/Contents/App-Resources/"));
-  return hits.length ? hits[hits.length - 1] : null;
+  let doc = null;
+  let exchanges = 0; // 最後にユーザーのセットを読んでからの End ExchangeDocument の回数（読み込み直後の 1 回は正常）
+  const re = /Loading document "([^"]+\.als)"|End ExchangeDocument/g;
+  for (const m of text.matchAll(re)) {
+    if (m[1] === undefined) {
+      exchanges++;
+      if (exchanges >= 2) doc = null;
+    } else if (!m[1].includes("/Contents/App-Resources/")) {
+      doc = m[1];
+      exchanges = 0;
+    }
+  }
+  return doc;
 }
 
 // 「今開いているセット」を Live に問い合わせる手段が無いための代替。
@@ -79,6 +96,32 @@ function currentLiveDocument() {
   return parseCurrentDocument(buf.toString("utf8"));
 }
 
+// 検証用 Remote Script（LiveMCP_Probe）に今のセットを聞く。動いていなければ null。
+// song.file_path が空なら未保存の新規セットなので { path: null } を返す
+function probeCurrentDocument() {
+  return new Promise((resolve) => {
+    const sock = net.createConnection({ host: "127.0.0.1", port: PORT }, () => {
+      sock.write(JSON.stringify({ op: "state" }) + "\n");
+    });
+    let buf = "";
+    const done = (v) => { sock.destroy(); resolve(v); };
+    sock.setTimeout(2000);
+    sock.on("data", (d) => {
+      buf += d.toString();
+      try { const r = JSON.parse(buf); done("file_path" in r ? { path: r.file_path || null } : null); } catch { /* まだ途中 */ }
+    });
+    sock.on("timeout", () => done(null));
+    sock.on("error", () => done(null));
+  });
+}
+
+// 今開いているセット。Remote Script が答えられればそれを正とし、無ければログから推定する
+async function currentLiveDocumentAsync() {
+  const probed = await probeCurrentDocument();
+  if (probed) return probed.path;
+  return currentLiveDocument();
+}
+
 function isOpenInLive(file) {
   const doc = currentLiveDocument();
   if (!doc) return false;
@@ -89,4 +132,4 @@ function isOpenInLive(file) {
   }
 }
 
-module.exports = { liveMessage, notify, currentLiveDocument, parseCurrentDocument, isOpenInLive };
+module.exports = { liveMessage, notify, currentLiveDocument, currentLiveDocumentAsync, probeCurrentDocument, parseCurrentDocument, isOpenInLive };

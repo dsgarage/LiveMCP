@@ -1,0 +1,135 @@
+							<MxDeviceAudioEffect Id="0">
+								<LomId Value="0" />
+								<LomIdView Value="0" />
+								<IsExpanded Value="true" />
+								<BreakoutIsExpanded Value="false" />
+								<On>
+									<LomId Value="0" />
+									<Manual Value="true" />
+									<AutomationTarget Id="__PID0__">
+										<LockEnvelope Value="0" />
+									</AutomationTarget>
+									<MidiCCOnOffThresholds>
+										<Min Value="64" />
+										<Max Value="127" />
+									</MidiCCOnOffThresholds>
+								</On>
+								<ModulationSourceCount Value="0" />
+								<ParametersListWrapper LomId="0" />
+								<Pointee Id="__PID1__" />
+								<LastSelectedTimeableIndex Value="0" />
+								<LastSelectedClipEnvelopeIndex Value="0" />
+								<LastPresetRef>
+									<Value />
+								</LastPresetRef>
+								<LockedScripts />
+								<IsFolded Value="false" />
+								<ShouldShowPresetName Value="true" />
+								<UserName Value="" />
+								<Annotation Value="" />
+								<SourceContext>
+									<Value>
+										<BranchSourceContext Id="0">
+											<OriginalFileRef>
+												<FileRef Id="0">
+													<RelativePathType Value="6" />
+													<RelativePath Value="Presets/Audio Effects/Max Audio Effect/LiveMCP/LiveMCP.amxd" />
+													<Path Value="/LIVEMCP_USER_LIBRARY/Presets/Audio Effects/Max Audio Effect/LiveMCP/LiveMCP.amxd" />
+													<Type Value="2" />
+													<LivePackName Value="" />
+													<LivePackId Value="" />
+													<OriginalFileSize Value="0" />
+													<OriginalCrc Value="0" />
+													<SourceHint Value="" />
+												</FileRef>
+											</OriginalFileRef>
+											<BrowserContentPath Value="query:UserLibrary#Presets:Audio%20Effects:Max%20Audio%20Effect:LiveMCP:LiveMCP.amxd" />
+											<LocalFiltersJson Value="" />
+											<PresetRef />
+											<BranchDeviceId Value="device:ableton:audiofx:MxDeviceAudioEffect?n=Max%20Audio%20Effect" />
+										</BranchSourceContext>
+									</Value>
+								</SourceContext>
+								<MpePitchBendUsesTuning Value="true" />
+								<ViewData Value="{}" />
+								<OverwriteProtectionNumber Value="3076" />
+								<AudioOutputsListWrapper LomId="0" />
+								<AudioInputsListWrapper LomId="0" />
+								<MidiOutputsListWrapper LomId="0" />
+								<MidiInputsListWrapper LomId="0" />
+								<PatchSlot>
+									<Value>
+										<MxPatchRef Id="0">
+											<FileRef>
+												<RelativePathType Value="6" />
+												<RelativePath Value="Presets/Audio Effects/Max Audio Effect/LiveMCP/LiveMCP.amxd" />
+												<Path Value="/LIVEMCP_USER_LIBRARY/Presets/Audio Effects/Max Audio Effect/LiveMCP/LiveMCP.amxd" />
+												<Type Value="2" />
+												<LivePackName Value="" />
+												<LivePackId Value="" />
+												<OriginalFileSize Value="10677" />
+												<OriginalCrc Value="31295" />
+												<SourceHint Value="" />
+											</FileRef>
+											<LastModDate Value="1788311315" />
+											<SourceContext />
+											<SampleUsageHint Value="0" />
+										</MxPatchRef>
+									</Value>
+								</PatchSlot>
+								<ParameterList>
+									<ParameterList />
+								</ParameterList>
+								<FileDropList>
+									<FileDropList />
+								</FileDropList>
+								<IdRefList>
+									<IdRefList />
+								</IdRefList>
+								<BlobSlot>
+									<Value>
+										<MxDBlob Id="1">
+											<Blob />
+											<HasData Value="true" />
+										</MxDBlob>
+									</Value>
+								</BlobSlot>
+								<Routables>
+									<InRoutings>
+										<MxDInRoutable Id="0">
+											<Routable>
+												<Target Value="AudioIn/None" />
+												<UpperDisplayString Value="No Output" />
+												<LowerDisplayString Value="" />
+												<MpeSettings>
+													<ZoneType Value="0" />
+													<FirstNoteChannel Value="1" />
+													<LastNoteChannel Value="15" />
+												</MpeSettings>
+												<MpePitchBendUsesTuning Value="true" />
+											</Routable>
+											<LomId Value="0" />
+										</MxDInRoutable>
+									</InRoutings>
+									<OutRoutings>
+										<MxDOutRoutable Id="0">
+											<Routable>
+												<Target Value="AudioOut/None" />
+												<UpperDisplayString Value="No Output" />
+												<LowerDisplayString Value="" />
+												<MpeSettings>
+													<ZoneType Value="0" />
+													<FirstNoteChannel Value="1" />
+													<LastNoteChannel Value="15" />
+												</MpeSettings>
+												<MpePitchBendUsesTuning Value="true" />
+											</Routable>
+											<LomId Value="0" />
+										</MxDOutRoutable>
+									</OutRoutings>
+									<MidiInRoutings />
+									<MidiOutRoutings />
+								</Routables>
+								<MpeEnabled Value="false" />
+								<MpeTuningEnabled Value="false" />
+							</MxDeviceAudioEffect>

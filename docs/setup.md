@@ -1,5 +1,8 @@
 # LiveMCP セットアップ手順
 
+> 使うだけなら [Releases](https://github.com/dsgarage/LiveMCP/releases/latest) の zip を展開して `sh install.sh` で済みます（README 参照）。
+> 以下はソースから導入する開発者向けの手順です。配布 zip は `node scripts/package.js` で作ります。
+
 ## 1. ビルドと導入
 
 ```bash

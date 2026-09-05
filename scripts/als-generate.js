@@ -399,7 +399,7 @@ function generateSongs({ packDir, output, name, baseSet, groups }) {
   let xml = /\.als$/i.test(baseSet) ? als.readAls(baseSet) : fs.readFileSync(baseSet, "utf8");
   for (const t of als.listTracks(xml).filter((t) => t.tag !== "ReturnTrack").reverse()) xml = xml.slice(0, t.start) + xml.slice(t.end + 1);
   xml = xml.replace("__SCENES__", scenesBlock(sceneList));
-  xml = xml.replace(/(<Tempo>\s*<LomId Value="0" \/>\s*<Manual Value=")[^"]*(" \/>)/, `$1${bpm}$2`);
+  xml = als.setTempo(xml, bpm);
 
   const basePointee = als.nextPointeeId(xml);
   const pid = makePidAllocator(basePointee);
@@ -484,7 +484,7 @@ function generate({ packDir, output, loops = [], oneshots = [], name, baseSet = 
   xml = xml.replace("__SCENES__", scenesBlock(scenes));
   xml = xml.replace(/(\n\t\t<Scenes>)[\s\S]*?(\n\t\t<\/Scenes>)/, `$1\n${scenesBlock(scenes)}$2`);
   // テンポ
-  xml = xml.replace(/(<Tempo>\s*<LomId Value="0" \/>\s*<Manual Value=")[^"]*(" \/>)/, `$1${bpm}$2`);
+  xml = als.setTempo(xml, bpm);
 
   const basePointee = als.nextPointeeId(xml);
   const pid = makePidAllocator(basePointee);
