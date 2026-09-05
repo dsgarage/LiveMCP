@@ -11,7 +11,7 @@ const { registerTools } = require("./tools");
 const { defaultSampleFolders } = require("./sample-search");
 
 const SERVER_NAME = "livemcp";
-const SERVER_VERSION = "1.0.0";
+const SERVER_VERSION = "1.0.1";
 const DEFAULT_PORT = 3360;
 
 // ---- Max 連携（max-api は Node for Max 実行時のみ存在する）----

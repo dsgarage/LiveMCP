@@ -16,3 +16,6 @@ data/loopcloud-packs.json
 data/loopcloud-kinds.json
 docs/loopcloud-packs.md
 docs/loopcloud-kind-review.md
+
+# 配布 zip（scripts/package.js の出力）
+dist/
