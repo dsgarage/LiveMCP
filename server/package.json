@@ -1,6 +1,6 @@
 {
   "name": "livemcp-server",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "LiveMCP - MCP server running inside Ableton Live via Node for Max",
   "type": "commonjs",
   "main": "src/mcp-server.js",
