@@ -1,0 +1,126 @@
+{
+ "FL_AMERICAN_ROAD_TRIP": {
+  "genre": "Metal",
+  "note": "案: ロック系。既存の RockDrumNBass が METAL にあるのに合わせた"
+ },
+ "ROYALE_RIFFS": {
+  "genre": "Metal",
+  "note": "案: ギターリフ集"
+ },
+ "V13_POST_PUNK": {
+  "genre": "Pops",
+  "note": "案: ポストパンク＝インディ寄り"
+ },
+ "MAN_VS_MACHINE": {
+  "genre": "Techno",
+  "note": "案"
+ },
+ "SYNTHETIC_SEQUENCES": {
+  "genre": "EDM",
+  "note": "案"
+ },
+ "OVERLOUD_FX": {
+  "genre": "EDM",
+  "note": "案: EDM 向け FX"
+ },
+ "Loopmasters Welcome Free Samplepack": {
+  "genre": "Misc",
+  "note": "案: 複数ジャンル混在の無料パック"
+ },
+ "Welcome_To_Loopcloud2020": {
+  "genre": "Misc",
+  "note": "案"
+ },
+ "LOOPMASTERS_XMAS_PRESENT_2022": {
+  "genre": "Misc",
+  "note": "案"
+ },
+ "XMAS_2021_FUTURE": {
+  "genre": "Misc",
+  "note": "案"
+ },
+ "XMAS_2021_PAST": {
+  "genre": "Misc",
+  "note": "案"
+ },
+ "XMAS_2021_PRESENT": {
+  "genre": "Misc",
+  "note": "案"
+ },
+ "Blind Audio - BLX15 - Country Retreat - Ambient & Foley": {
+  "folders": {
+   "Birds & Nature": "oneshots",
+   "Doors & Latches": "oneshots",
+   "Misc": "oneshots",
+   "Walking": "oneshots",
+   "Water": "oneshots",
+   "Woodburner": "oneshots"
+  },
+  "note": "案: フォーリーはワンショット扱い"
+ },
+ "Jay-Js_Drum_Library": {
+  "folders": {
+   "Disco Bleeps": "oneshots"
+  }
+ },
+ "Tsunami Track Sounds - Metal Monster": {
+  "folders": {
+   "Piano": "loops"
+  }
+ },
+ "TTS_ROCKDrum&Bass": {
+  "folders": {
+   "TTS_RDB_Demo Mix": "skip"
+  }
+ },
+ "Singomakers_Emotional_Piano": {
+  "layout": "songs",
+  "note": "曲キット型: 曲を行、パート（WAV と MIDI）を列に"
+ },
+ "Singomakers_Emotional_Piano_Theme_3": {
+  "layout": "songs",
+  "note": "曲キット型: 曲を行、パート（WAV と MIDI）を列に"
+ },
+ "Singomakers_Emotional_Piano_Themes_Vol_2": {
+  "layout": "songs",
+  "note": "曲キット型: 曲を行、パート（WAV と MIDI）を列に"
+ },
+ "Singomakers_Emotional_Piano_Themes_Vol_5_(Full_Zip)": {
+  "layout": "songs",
+  "note": "曲キット型: 曲を行、パート（WAV と MIDI）を列に"
+ },
+ "Singomakers_Emotional_Piano_Themes_Vol_6_(Full_Zip)": {
+  "layout": "songs",
+  "note": "曲キット型: 曲を行、パート（WAV と MIDI）を列に"
+ },
+ "Singomakers_Emotional_Piano_Themes_Vol_7_(Full_Zip)": {
+  "layout": "songs",
+  "note": "曲キット型: 曲を行、パート（WAV と MIDI）を列に"
+ },
+ "Singomakers_Emotional_Piano_Themes_Vol_8_(Full_Zip)": {
+  "layout": "songs",
+  "note": "曲キット型: 曲を行、パート（WAV と MIDI）を列に"
+ },
+ "Singomakers_Emotional_Piano_Themes_Vol_9_(ZIP_Main)": {
+  "layout": "songs",
+  "note": "曲キット型: 曲を行、パート（WAV と MIDI）を列に"
+ },
+ "Singomakers_Emotional_Piano_Vol_4_(Full_Zip)": {
+  "layout": "songs",
+  "note": "曲キット型: 曲を行、パート（WAV と MIDI）を列に"
+ },
+ "Singomakers_EDM_2020_(Full_Zip)": {
+  "setName": "SingomakersEDM2020",
+  "note": "EDM2020.als は 2025-10-05 に手作業で作った既存セットと衝突するため、レーベル名を残す"
+ },
+ "TTS_ThrashHardcore_Full": {
+  "split": [
+   "Deathrash",
+   "Groove Metal 01",
+   "Groove Metal 02",
+   "Groove Metal 03",
+   "Metalcore"
+  ],
+  "note": "スタイルごとに 1 セット（2025-09-28 の手作りセットと同じ分け方）。One Shots は各セットに入れる"
+ }
+}

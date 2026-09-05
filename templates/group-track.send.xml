@@ -1,0 +1,17 @@
+							<TrackSendHolder Id="__INDEX__">
+								<Send>
+									<LomId Value="0" />
+									<Manual Value="0.0003162277571" />
+									<MidiControllerRange>
+										<Min Value="0.0003162277571" />
+										<Max Value="1" />
+									</MidiControllerRange>
+									<AutomationTarget Id="__PID2__">
+										<LockEnvelope Value="0" />
+									</AutomationTarget>
+									<ModulationTarget Id="__PID3__">
+										<LockEnvelope Value="0" />
+									</ModulationTarget>
+								</Send>
+								<EnabledByUser Value="true" />
+							</TrackSendHolder>

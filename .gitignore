@@ -1,0 +1,18 @@
+node_modules/
+.DS_Store
+device/code/mcp-server.js
+device/LiveMCP.amxd
+*.log
+
+# Remote Script の検証出力
+remote-script/**/probe-report.json
+remote-script/**/__pycache__/
+
+# Wiki（別リポジトリ LiveMCP.wiki.git の clone。リポジトリ直下で編集して直接 push する）
+wiki/
+
+# Loopcloud 整理の生成物（所有パックとファイル名の一覧。scripts/loopcloud-survey.js / loopcloud-build.js が作る。人の判断は data/loopcloud-overrides.json に残す）
+data/loopcloud-packs.json
+data/loopcloud-kinds.json
+docs/loopcloud-packs.md
+docs/loopcloud-kind-review.md

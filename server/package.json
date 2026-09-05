@@ -1,0 +1,21 @@
+{
+  "name": "livemcp-server",
+  "version": "0.1.0",
+  "description": "LiveMCP - MCP server running inside Ableton Live via Node for Max",
+  "type": "commonjs",
+  "main": "src/mcp-server.js",
+  "scripts": {
+    "build": "esbuild src/bundle-entry.js --bundle --platform=node --format=cjs --external:max-api --loader:.xml=text --outfile=../device/code/mcp-server.js",
+    "test": "node --test --test-force-exit test/*.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
