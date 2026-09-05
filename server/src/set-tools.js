@@ -27,15 +27,15 @@ function openInLiveApp(file) {
  */
 function createSetTools({
   isOpenInLive = notifyLib.isOpenInLive,
-  currentLiveDocument = notifyLib.currentLiveDocument,
+  currentLiveDocument = notifyLib.currentLiveDocumentAsync, // Remote Script が動いていれば実際の file_path（未保存なら null）
   liveMessage = notifyLib.liveMessage,
   openApp = openInLiveApp,
 } = {}) {
   async function groupTracksInSet(args) {
-    const setPath = args.setPath || currentLiveDocument();
+    const setPath = args.setPath || (await currentLiveDocument());
     if (!setPath) {
       throw new Error(
-        "対象のセットが分かりません。setPath で .als の絶対パスを指定してください"
+        "対象のセットが分かりません（未保存の新規セットか、Live が開いているセットを判定できません）。setPath で .als の絶対パスを指定してください"
       );
     }
     if (!fs.existsSync(setPath)) {
