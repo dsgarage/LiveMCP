@@ -4,6 +4,7 @@
 "use strict";
 
 const { z } = require("zod");
+const { execFile } = require("node:child_process");
 const { searchSamples } = require("./sample-search");
 const { createSetTools } = require("./set-tools");
 
@@ -232,6 +233,62 @@ function registerTools(server, bridge, config, diagnostics) {
         errors.push(...r.errors);
       }
       return ok({ device_index: deviceIndex, added: pads.length, failed: errors.length, pads, errors });
+    }
+  );
+
+  // Live 上でキーを押す（macOS の System Events）。LOM に無い操作（トラックのグループ化）のための経路。
+  // 送信元にアクセシビリティ許可が要る。無ければ macOS が (1002) を返すので、その旨を伝える
+  const sendKeys = (steps) =>
+    new Promise((resolve, reject) => {
+      const lines = ['tell application "Ableton Live 12 Suite" to activate', "delay 0.4"];
+      for (const s of steps) {
+        if (s.keyCode !== undefined) lines.push(`tell application "System Events" to key code ${s.keyCode}${s.using ? ` using ${s.using}` : ""}`);
+        else lines.push(`tell application "System Events" to keystroke "${s.key}"${s.using ? ` using ${s.using}` : ""}`);
+        lines.push("delay 0.15");
+      }
+      execFile("osascript", lines.flatMap((l) => ["-e", l]), (err, stdout, stderr) => {
+        if (!err) return resolve();
+        const msg = String(stderr || err.message);
+        if (/1002|not allowed|許可されません/.test(msg)) {
+          reject(new Error(
+            "キー送信が macOS に許可されていません。システム設定 → プライバシーとセキュリティ → アクセシビリティ で、" +
+              "Live（Ableton Live 12 Suite）を許可してから再実行してください。詳細: " + msg.trim()
+          ));
+        } else reject(new Error("キー送信に失敗しました: " + msg.trim()));
+      });
+    });
+
+  server.registerTool(
+    "live.track.group",
+    {
+      description:
+        "開いているセットで、隣接したトラックを Group トラックにまとめる。LOM に無い操作のため、先頭を選択してから " +
+        "Live に Shift+→ と Cmd+G を送り、できたグループを命名・検証する（macOS、アクセシビリティ許可が必要）",
+      inputSchema: {
+        tracks: z
+          .array(z.union([z.number().int().min(0), z.string()]))
+          .min(1)
+          .describe("対象トラック。番号（0 始まり）か名前（前方一致）。隣接している必要がある"),
+        groupName: z.string().describe("グループ名"),
+      },
+    },
+    async (args) => {
+      const set = await bridge.call("read_set", { includeClips: false });
+      const indices = [];
+      for (const t of args.tracks) {
+        if (typeof t === "number") { indices.push(t); continue; }
+        const hits = set.tracks.filter((x) => x.name.toUpperCase().startsWith(t.toUpperCase()) && x.type !== "group");
+        if (!hits.length) throw new Error(`トラックが見つかりません: ${t}`);
+        for (const h of hits) if (!indices.includes(h.index)) indices.push(h.index);
+      }
+      const prep = await bridge.call("group_prepare", { trackIndices: indices });
+      const steps = [];
+      for (let i = 1; i < prep.count; i++) steps.push({ keyCode: 124, using: "shift down" }); // →
+      steps.push({ key: "g", using: "command down" });
+      await sendKeys(steps);
+      await new Promise((r) => setTimeout(r, 800));
+      const done = await bridge.call("group_finish", { trackIds: prep.track_ids, name: args.groupName });
+      return ok({ ...done, tracks: indices });
     }
   );
 
