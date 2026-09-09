@@ -68,6 +68,10 @@ function dispatch(op, args) {
       return createAudioClips(args);
     case "create_midi_clip":
       return createMidiClip(args);
+    case "group_prepare":
+      return groupPrepare(args);
+    case "group_finish":
+      return groupFinish(args);
     case "build_drum_rack":
       return buildDrumRack(args);
     case "insert_device":
@@ -152,12 +156,19 @@ function readSet(args) {
         class_name: str(dev.get("class_name")),
       });
     }
+    var isGroup = num(track.get("is_foldable")) === 1;
     var entry = {
       index: t,
+      id: num(track.id),
       name: str(track.get("name")),
-      type: num(track.get("has_midi_input")) === 1 ? "midi" : "audio",
+      type: isGroup ? "group" : num(track.get("has_midi_input")) === 1 ? "midi" : "audio",
       devices: devices,
     };
+    // グループに入っているトラックは、所属先のグループ名を出す
+    if (num(track.get("is_grouped")) === 1) {
+      var gt = api("live_set tracks " + t + " group_track");
+      entry.group = str(gt.get("name"));
+    }
     if (args.includeClips) {
       var clips = [];
       for (var s = 0; s < sceneCount; s++) {
@@ -198,6 +209,44 @@ function createAudioClip(args) {
     length: num(clip.get("length")),
     file_path: str(clip.get("file_path")),
   };
+}
+
+// トラックのグループ化（前半）。LOM に group_tracks が無いので、Live 上で Cmd+G を押す方式にしている。
+// ここでは対象が隣接していることを確かめ、先頭のトラックを選択状態にする。キー送信は node.script 側（osascript）。
+function groupPrepare(args) {
+  var idx = args.trackIndices.slice().sort(function (a, b) { return a - b; });
+  for (var i = 1; i < idx.length; i++) {
+    if (idx[i] !== idx[i - 1] + 1) throw new Error("対象のトラックが隣接していません: " + idx.join(", ") + "（Live のグループ化は隣接したトラックだけ）");
+  }
+  var ids = [];
+  for (var j = 0; j < idx.length; j++) {
+    var tr = api("live_set tracks " + idx[j]);
+    if (num(tr.get("is_foldable")) === 1) throw new Error("グループトラックは対象にできません: " + str(tr.get("name")));
+    ids.push(num(tr.id));
+  }
+  var view = api("live_set view");
+  view.set("selected_track", "id", ids[0]);
+  var sel = api("live_set view selected_track");
+  if (num(sel.id) !== ids[0]) throw new Error("トラックを選択できませんでした");
+  return { first_index: idx[0], count: idx.length, track_ids: ids };
+}
+
+// トラックのグループ化（後半）。Cmd+G の後に選択されているのが新しいグループなら命名し、子の所属を検証する
+function groupFinish(args) {
+  var sel = api("live_set view selected_track");
+  if (num(sel.get("is_foldable")) !== 1) {
+    throw new Error("グループが作られていません（選択中: " + str(sel.get("name")) + "）。Live が前面に無いか、キー送信が許可されていない可能性があります");
+  }
+  var groupId = num(sel.id);
+  var missing = [];
+  for (var i = 0; i < args.trackIds.length; i++) {
+    var tr = new LiveAPI("id " + args.trackIds[i]);
+    var g = new LiveAPI("id " + args.trackIds[i] + " group_track");
+    if (num(tr.get("is_grouped")) !== 1 || num(g.id) !== groupId) missing.push(str(tr.get("name")));
+  }
+  if (missing.length) throw new Error("グループに入っていないトラックがあります: " + missing.join(", "));
+  if (args.name) sel.set("name", args.name);
+  return { group_id: groupId, name: str(sel.get("name")), grouped: args.trackIds.length };
 }
 
 // ノート入りの MIDI クリップを 1 つ作る。
