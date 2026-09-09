@@ -164,6 +164,33 @@ function registerTools(server, bridge, config, diagnostics) {
   );
 
   server.registerTool(
+    "live.clip.create_midi",
+    {
+      description:
+        "ノート入りの MIDI クリップをセッションビューのクリップスロットに作る。対象は MIDI トラックのみ。" +
+        "音源チェック用の 1 音クリップや、簡単なパターンの配置に使う",
+      inputSchema: {
+        trackIndex: z.number().int().min(0).describe("MIDI トラック番号（0 始まり）"),
+        sceneIndex: z.number().int().min(0).describe("シーン（クリップスロット）番号（0 始まり）"),
+        lengthBeats: z.number().positive().default(16).describe("クリップの長さ（拍。4 小節 = 16）"),
+        notes: z
+          .array(
+            z.object({
+              pitch: z.number().int().min(0).max(127).describe("MIDI ノート番号（Ableton 表記 C3 = 60、C1 = 36）"),
+              start: z.number().min(0).default(0).describe("開始位置（拍）"),
+              duration: z.number().positive().default(1).describe("長さ（拍）"),
+              velocity: z.number().int().min(1).max(127).default(100).describe("ベロシティ"),
+            })
+          )
+          .default([])
+          .describe("置くノート"),
+        name: z.string().optional().describe("クリップ名"),
+      },
+    },
+    async (args) => ok(await bridge.call("create_midi_clip", args))
+  );
+
+  server.registerTool(
     "live.drumrack.build",
     {
       description:
