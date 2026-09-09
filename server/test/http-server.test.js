@@ -44,6 +44,7 @@ test("MCP initialize と tools/list が通る", async () => {
     "live.set.read",
     "live.samples.search",
     "live.clip.create_audio",
+    "live.clip.create_midi",
     "live.device.insert",
     "live.device.replace_sample",
     "live.device.params",

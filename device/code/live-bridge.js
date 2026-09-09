@@ -66,6 +66,8 @@ function dispatch(op, args) {
       return createAudioClip(args);
     case "create_audio_clips":
       return createAudioClips(args);
+    case "create_midi_clip":
+      return createMidiClip(args);
     case "build_drum_rack":
       return buildDrumRack(args);
     case "insert_device":
@@ -195,6 +197,57 @@ function createAudioClip(args) {
     name: str(clip.get("name")),
     length: num(clip.get("length")),
     file_path: str(clip.get("file_path")),
+  };
+}
+
+// ノート入りの MIDI クリップを 1 つ作る。
+// Live 12 の add_new_notes は辞書引数（{ notes: [{ pitch, start_time, duration, velocity, mute }] }）。
+// 旧式の set_notes / notes / note / done は LiveAPI オブジェクトをまたぐと効かないので、ここで 1 つのオブジェクトの中で済ませる。
+// js から辞書を渡す方法は Max のバージョンで違うため、JS オブジェクト → Dict の順に試す。
+function createMidiClip(args) {
+  var t = args.trackIndex, sc = args.sceneIndex;
+  var slot = api("live_set tracks " + t + " clip_slots " + sc);
+  if (num(slot.get("has_clip")) === 1) {
+    throw new Error("クリップスロットが空ではありません (track " + t + ", scene " + sc + ")");
+  }
+  var length = args.lengthBeats || 16;
+  slot.call("create_clip", length);
+  var clip = api("live_set tracks " + t + " clip_slots " + sc + " clip");
+  var notes = [];
+  for (var i = 0; i < (args.notes || []).length; i++) {
+    var n = args.notes[i];
+    notes.push({
+      pitch: n.pitch,
+      start_time: n.start || 0,
+      duration: n.duration || 1,
+      velocity: n.velocity === undefined ? 100 : n.velocity,
+      mute: 0,
+    });
+  }
+  var how = "none";
+  if (notes.length) {
+    // 実機（Live 12.4.5 / Max 9.1）: JS オブジェクトをそのまま渡すとエラーにならないがノートも入らない。Dict を使う
+    var d = new Dict();
+    d.parse(JSON.stringify({ notes: notes }));
+    clip.call("add_new_notes", d);
+    how = "dict";
+    d.freepeer();
+  }
+  if (args.name) clip.set("name", args.name);
+  // 入ったノート数は get_notes_extended（JSON 文字列を返す）で数える。旧式の get_notes は Live 12 では常に 0
+  var count = -1;
+  try {
+    var r = clip.call("get_notes_extended", 0, 128, 0, length);
+    var parsed = JSON.parse(str(r));
+    count = parsed.notes ? parsed.notes.length : 0;
+  } catch (e2) {}
+  return {
+    created: true,
+    name: str(clip.get("name")),
+    length: num(clip.get("length")),
+    notes_requested: notes.length,
+    notes_in_clip: count,
+    method: how,
   };
 }
 
