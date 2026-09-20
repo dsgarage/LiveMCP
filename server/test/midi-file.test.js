@@ -50,3 +50,33 @@ test("MIDI でないファイルは失敗する", () => {
   assert.throws(() => parseMidi(f), /MIDI ファイルではありません/);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("コントロールチェンジを時刻順に読める（#19）", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "midi-"));
+  const f = path.join(dir, "pedal.mid");
+  fs.writeFileSync(f, smf([
+    [0, 0xb0, 64, 127],                     // ペダル踏む @0
+    [0, 0x90, 60, 100],                     // C4 on @0
+    [96, 0xb0, 1, 40],                      // モジュレーション @1 拍
+    [0, 0x80, 60, 64],                      // off @1 拍
+    [96, 0xb0, 64, 0],                      // ペダル離す @2 拍
+    [0, 0xff, 0x2f, 0],
+  ]));
+  const r = parseMidi(f);
+  assert.deepStrictEqual(r.ccs, [
+    { controller: 1, time: 1, value: 40 },
+    { controller: 64, time: 0, value: 127 },
+    { controller: 64, time: 2, value: 0 },
+  ].sort((a, b) => a.time - b.time || a.controller - b.controller));
+  // CC はノートの解釈を壊さない
+  assert.deepStrictEqual(r.notes, [{ pitch: 60, time: 0, duration: 1, velocity: 100 }]);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("CC が無ければ ccs は空（#19）", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "midi-"));
+  const f = path.join(dir, "dry.mid");
+  fs.writeFileSync(f, smf([[0, 0x90, 60, 100], [96, 0x80, 60, 64], [0, 0xff, 0x2f, 0]]));
+  assert.deepStrictEqual(parseMidi(f).ccs, []);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

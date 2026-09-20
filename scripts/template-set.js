@@ -40,7 +40,8 @@ function buildTemplateSet(output) {
     .replace(/__NAME__/g, name)
     .replace(/__COLOR__/g, String(color))
     .replace("__SLOTS__", slots)
-    .replace("__FREEZE_SLOTS__", slots);
+    .replace("__FREEZE_SLOTS__", slots)
+    .replace("__DEVICES__", "<Devices />"); // 楽器は載せない（テンプレートセットは空のトラック）
   const take = (block) => { const n = count(block); const out = pid(block); next += n; return out; };
 
   // Live の既定セットと同じ MIDI 2 本 + Audio 2 本、その後ろに LiveMCP のトラック

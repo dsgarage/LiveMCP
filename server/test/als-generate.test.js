@@ -275,3 +275,120 @@ test("親フォルダの下りで、別の種別として分類表に載って�
   assert.strictEqual(count(collect(pack, ["Vocals"], { prior: "oneshot", classify: false })), 5);
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+// ---- MIDI クリップの CC エンベロープ（#19）----
+// Live が .mid を読み込んで保存したセットと同じ形になっているかを見る。
+
+const { midiTrack, makePidAllocator, ccPlaceholder } = require("../../scripts/als-generate");
+
+function midiVarlen(n) {
+  const bytes = [n & 0x7f];
+  while ((n >>= 7)) bytes.unshift((n & 0x7f) | 0x80);
+  return Buffer.from(bytes);
+}
+function midiFile(events, ppq = 96) {
+  const body = Buffer.concat(events.map(([delta, ...b]) => Buffer.concat([midiVarlen(delta), Buffer.from(b)])));
+  const track = Buffer.concat([Buffer.from("MTrk"), Buffer.from([0, 0, 0, body.length]), body]);
+  const header = Buffer.concat([Buffer.from("MThd"), Buffer.from([0, 0, 0, 6, 0, 0, 0, 1, ppq >> 8, ppq & 0xff])]);
+  return Buffer.concat([header, track]);
+}
+function midiOnDisk(dir, name, events) {
+  const p = path.join(dir, name);
+  fs.writeFileSync(p, midiFile(events));
+  return { path: p, meta: { stem: name.replace(/\.mid$/, "") } };
+}
+
+test("CC64 を持つクリップは ControllerTargets.66 を指す ClipEnvelope になる（#19）", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "als-cc-"));
+  const wet = midiOnDisk(dir, "wet.mid", [
+    [0, 0xb0, 64, 127],          // 開始時点で踏んでいる
+    [0, 0x90, 60, 100],
+    [192, 0xb0, 64, 0],          // @2 拍で離す
+    [0, 0x80, 60, 64],
+    [96, 0xb0, 64, 127],         // @3 拍で踏み直す
+    [0, 0xff, 0x2f, 0],
+  ]);
+  const xml = midiTrack({ id: 20, name: "WET", color: 0, files: [wet], scenes: 1, pid: makePidAllocator(84000) });
+
+  assert.ok(!/__[A-Z_]+\d*__/.test(xml), "置換し残しがある: " + (/__[A-Z_]+\d*__/.exec(xml) || [])[0]);
+
+  // PointeeId は同じトラックの ControllerTargets.66 の Id と一致する
+  const target = /<ControllerTargets\.66 Id="(\d+)">\s*<LockEnvelope Value="(\d)"/.exec(xml);
+  const pointee = /<ClipEnvelope Id="1">\s*<EnvelopeTarget>\s*<PointeeId Value="(\d+)" \/>/.exec(xml);
+  assert.ok(target && pointee, "ControllerTargets.66 と ClipEnvelope が揃っていない");
+  assert.strictEqual(pointee[1], target[1]);
+  assert.strictEqual(target[2], "1", "使っている CC は LockEnvelope=1");
+
+  // 初期値は番兵の時刻に入り、値が変わる時刻には「前の値」「後の値」の 2 点が立つ（階段）
+  const events = [...xml.matchAll(/<FloatEvent Id="\d+" Time="([-\d.]+)" Value="(\d+)" \/>/g)].map((m) => [m[1], m[2]]);
+  assert.deepStrictEqual(events, [
+    ["-63072000", "127"],
+    ["2", "127"], ["2", "0"],
+    ["3", "0"], ["3", "127"],
+  ]);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("CC の無いクリップは空の Envelopes のまま（#19）", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "als-cc-"));
+  const dry = midiOnDisk(dir, "dry.mid", [[0, 0x90, 60, 100], [96, 0x80, 60, 64], [0, 0xff, 0x2f, 0]]);
+  const xml = midiTrack({ id: 20, name: "DRY", color: 0, files: [dry], scenes: 1, pid: makePidAllocator(84000) });
+  assert.ok(!/__[A-Z_]+\d*__/.test(xml));
+  assert.strictEqual(/<ClipEnvelope /.test(xml), false);
+  assert.ok(/<Envelopes \/>/.test(xml), "エンベロープが無いときは <Envelopes /> になる");
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("既定では CC64 だけを書き、枠の無い CC は落とす（#19）", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "als-cc-"));
+  const f = midiOnDisk(dir, "mod.mid", [
+    [0, 0xb0, 1, 40],            // モジュレーション（既定の対象外）
+    [0, 0x90, 60, 100],
+    [96, 0xb0, 1, 90],           // 値が変わるので中身のあるエンベロープになる
+    [0, 0x80, 60, 64],
+    [0, 0xff, 0x2f, 0],
+  ]);
+  const off = midiTrack({ id: 20, name: "mod", color: 0, files: [f], scenes: 1, pid: makePidAllocator(84000) });
+  assert.strictEqual(/<ClipEnvelope /.test(off), false, "既定では CC1 は書かない");
+
+  const on = midiTrack({ id: 20, name: "mod", color: 0, files: [f], scenes: 1, pid: makePidAllocator(84000), ccList: [1] });
+  const target = /<ControllerTargets\.3 Id="(\d+)">\s*<LockEnvelope Value="(\d)"/.exec(on); // CC1 → index 3
+  const pointee = /<PointeeId Value="(\d+)" \/>/.exec(on);
+  assert.strictEqual(ccPlaceholder(1), "__PID21__");
+  assert.strictEqual(pointee[1], target[1]);
+  assert.strictEqual(target[2], "1");
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("値が一度も変わらない CC はエンベロープにしない（#19）", () => {
+  // Live は中身の無いエンベロープを読み込み時に破棄するが、
+  // トラックに楽器が載っているとその破棄の途中で落ちる（Live 12.4.5 で実測）
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "als-cc-"));
+  const held = midiOnDisk(dir, "held.mid", [
+    [0, 0xb0, 64, 127],          // 踏んだまま最後まで変わらない
+    [0, 0x90, 60, 100],
+    [192, 0xb0, 64, 127],        // 同じ値の再送信も「変化」ではない
+    [0, 0x80, 60, 64],
+    [0, 0xff, 0x2f, 0],
+  ]);
+  const xml = midiTrack({ id: 20, name: "held", color: 0, files: [held], scenes: 1, pid: makePidAllocator(84000) });
+  assert.strictEqual(/<ClipEnvelope /.test(xml), false);
+  assert.ok(/<Envelopes \/>/.test(xml));
+  // LockEnvelope は見ない。テンプレート（Live が書いた実物）で 66 は元から 1 になっている
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("プリセットから取り出した楽器チェーンに KeyMidi を残さない（#22）", () => {
+  // Live が書いたセットのデバイスには KeyMidi が無く、セット側のマッピング表にも登録が無い。
+  // 残したまま置くと、クリップに CC エンベロープがある場合に Live が落ちる
+  const { instrumentChain } = require("../../scripts/device-preset");
+  const CL = "/Applications/Ableton Live 12 Suite.app/Contents/App-Resources/Core Library/Racks/Instrument Racks";
+  const piano = path.join(CL, "Piano & Keys", "Ac Piano Upright.adg");
+  if (!fs.existsSync(piano)) return; // Live 未インストールの環境では飛ばす
+  const r = instrumentChain(piano);
+  assert.deepStrictEqual(r.names, ["OriginalSimpler", "ChannelEq", "Reverb"]);
+  assert.strictEqual(/<KeyMidi>/.test(r.xml), false);
+  // <Devices> に並べるので Id は 0,1,2 に振り直す
+  // 直下（タブ 7 個）に並ぶデバイスだけを見る
+  assert.deepStrictEqual([...r.xml.matchAll(/^\t{7}<[A-Za-z][\w.]* Id="(\d+)"/gm)].map((m) => m[1]), ["0", "1", "2"]);
+});
