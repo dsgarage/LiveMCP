@@ -125,19 +125,33 @@ function numberedDirs(dir) {
 const toFile = (p) => ({ path: p, meta: { stem: clipName(p) } });
 
 // トラック 1 本ぶんの指定。files は null 詰めの配列（null は空スロット）
-function column(name, files, names, instrument = PIANO) {
+// pad: true を付けると、同じクリップを持つパッドの相方を作り、2 本をグループにまとめる。
+// グループのスロットを発火すると中の 2 本が同時に鳴るので、1 列でピアノとパッドが重なる
+function column(name, files, names, instrument = PIANO, { pad = false } = {}) {
   const list = files.map((f) => (f ? toFile(f) : null));
-  return { name, files: list, clipNames: names || files.map((f) => (f ? clipName(f) : "")), preset: preset(instrument) };
+  return { name, files: list, clipNames: names || files.map((f) => (f ? clipName(f) : "")), preset: preset(instrument), pad };
 }
 
-function fromDir(name, dir, instrument) {
-  return column(name, midsIn(dir), null, instrument);
+function fromDir(name, dir, instrument, opts) {
+  return column(name, midsIn(dir), null, instrument, opts);
 }
 
-// クリップの無いパッド用トラック。コードのクリップをここへコピーすれば重ねられる
-const padColumn = () => ({ name: "PAD", files: [], clipNames: [], preset: preset(PAD) });
+// pad 付きの列を「ピアノ + パッド」の 2 本に展開し、グループにする組を返す
+function expandPads(columns) {
+  const out = [], pairs = [];
+  for (const c of columns) {
+    if (!c.pad) { out.push(c); continue; }
+    const piano = { ...c, name: `${c.name}` };
+    const twin = { ...c, name: `${c.name} Pad`, preset: preset(PAD) };
+    pairs.push({ name: c.name, at: out.length });
+    out.push(piano, twin);
+  }
+  return { columns: out, pairs };
+}
 
-function buildSet({ output, name, columns, scenes, sceneList, tempo }) {
+
+function buildSet({ output, name, columns: input, scenes, sceneList, tempo }) {
+  const { columns, pairs } = expandPads(input);
   const filled = columns.reduce((n, c) => n + c.files.filter(Boolean).length, 0);
   if (!filled) return null;
 
@@ -157,12 +171,19 @@ function buildSet({ output, name, columns, scenes, sceneList, tempo }) {
   const firstReturn = als.listTracks(xml).find((t) => t.tag === "ReturnTrack");
   xml = xml.slice(0, firstReturn.start) + blocks.join("\n") + "\n" + xml.slice(firstReturn.start);
   xml = xml.replace(/<NextPointeeId Value="\d+" \/>/, `<NextPointeeId Value="${pid.next}" />`);
+
+  // ピアノとパッドの組をグループにまとめる（後ろから畳むと前の組の位置がずれない）
+  for (const p of [...pairs].reverse()) {
+    const mids = als.listTracks(xml).filter((t) => t.tag === "MidiTrack");
+    xml = als.groupTracks(xml, { name: p.name, trackIds: [mids[p.at].id, mids[p.at + 1].id] }).xml;
+  }
+
   assertValid(xml, `${path.basename(path.dirname(output))} / ${name}`);
 
   fs.mkdirSync(path.dirname(output), { recursive: true });
   fs.mkdirSync(path.join(path.dirname(output), "Ableton Project Info"), { recursive: true });
   als.writeAls(output, xml);
-  return { output, name, tracks: columns.length, scenes, clips: filled };
+  return { output, name, tracks: columns.length, groups: pairs.length, scenes, clips: filled };
 }
 
 // 01_Ideas … 1 行 = 1 アイデア、列は Chords / Idea DRY / Idea WET。シーンにアイデアの BPM を持たせる
@@ -187,8 +208,7 @@ function setIdeas(keyDir, output) {
     output, name: "01_Ideas", scenes: dirs.length, sceneList,
     tempo: bpms.length ? bpms[Math.floor(bpms.length / 2)] : 120,
     columns: [
-      column("Chords", chords),
-      column("Chords Pad", chords, null, PAD), // 同じ行に置くので、シーンを発火すると和音が重なる
+      column("Chords", chords, null, PIANO, { pad: true }), // ピアノ + パッドのグループになる
       column("Idea DRY", dry),
       column("Idea WET", wet),
     ],
@@ -205,21 +225,22 @@ function setChords(keyDir, libRoot, keyName, output) {
     .flatMap((d) => midsIn(path.join(libRoot, CHORD_PACK, d, keyName, "Chords")))
     .sort((a, b) => naturalCompare(path.basename(a), path.basename(b)));
 
+  const P = { pad: true }; // 和音の列はピアノ + パッドのグループにする
   const columns = [
-    fromDir("Top 100", path.join(keyDir, "4 - Top 100 Chord Progs")),
-    column("Pack 101-300", packFiles),
-    fromDir("Pop", path.join(prog, "Pop")),
-    fromDir("EDM", path.join(prog, "EDM")),
-    fromDir("R&B Neosoul Jazz", path.join(prog, "R&B_Neosoul_Jazz")),
-    fromDir("Emotional", path.join(prog, "Emotional")),
-    fromDir("Beautiful", path.join(prog, "Beautiful")),
-    fromDir("Dark HipHop Trap", path.join(prog, "Dark_HipHop_Trap")),
-    fromDir("Sexy 7th 9th", path.join(prog, "Sexy_7th_9th")),
-    fromDir("Gorgeous", path.join(bonus, "1 - Gorgeous Chord Progressions")),
-    fromDir("Rhythmic", path.join(bonus, "3 - Rhythmic Chord Progressions")),
+    fromDir("Top 100", path.join(keyDir, "4 - Top 100 Chord Progs"), PIANO, P),
+    column("Pack 101-300", packFiles, null, PIANO, P),
+    fromDir("Pop", path.join(prog, "Pop"), PIANO, P),
+    fromDir("EDM", path.join(prog, "EDM"), PIANO, P),
+    fromDir("R&B Neosoul Jazz", path.join(prog, "R&B_Neosoul_Jazz"), PIANO, P),
+    fromDir("Emotional", path.join(prog, "Emotional"), PIANO, P),
+    fromDir("Beautiful", path.join(prog, "Beautiful"), PIANO, P),
+    fromDir("Dark HipHop Trap", path.join(prog, "Dark_HipHop_Trap"), PIANO, P),
+    fromDir("Sexy 7th 9th", path.join(prog, "Sexy_7th_9th"), PIANO, P),
+    fromDir("Gorgeous", path.join(bonus, "1 - Gorgeous Chord Progressions"), PIANO, P),
+    fromDir("Rhythmic", path.join(bonus, "3 - Rhythmic Chord Progressions"), PIANO, P),
   ].filter((c) => c.files.some(Boolean));
   const scenes = Math.max(8, ...columns.map((c) => c.files.length));
-  return buildSet({ output, name: "02_Chords", columns: [...columns, padColumn()], scenes, sceneList: numberedScenes(scenes) });
+  return buildSet({ output, name: "02_Chords", columns, scenes, sceneList: numberedScenes(scenes) });
 }
 
 // 03_Melodies … Melody / Starter は DRY・WET を同じ行に揃える。Extras は BPM 帯ごとの列
@@ -244,14 +265,15 @@ function setMelodies(keyDir, output) {
 function setPalette(keyDir, output) {
   const cb = path.join(keyDir, "6 - Chord Builder");
   const bonus = path.join(keyDir, "7 - Other Bonuses");
+  const P = { pad: true };
   const columns = [
-    ...numberedDirs(cb).map((c) => fromDir(c.replace(/^(\d+)\s*-\s*/, "$1 "), path.join(cb, c))),
+    ...numberedDirs(cb).map((c) => fromDir(c.replace(/^(\d+)\s*-\s*/, "$1 "), path.join(cb, c), PIANO, P)),
     fromDir("Intros & Arps", path.join(bonus, "2 - Piano Song Intros Arps")),
     fromDir("Basslines", path.join(bonus, "4 - Catchy Basslines Pack")),
-    fromDir("Extra Chords", path.join(bonus, "7 - More Extras", "Chords")),
+    fromDir("Extra Chords", path.join(bonus, "7 - More Extras", "Chords"), PIANO, P),
   ].filter((c) => c.files.some(Boolean));
   const scenes = Math.max(8, ...columns.map((c) => c.files.length));
-  return buildSet({ output, name: "04_Palette", columns: [...columns, padColumn()], scenes, sceneList: numberedScenes(scenes) });
+  return buildSet({ output, name: "04_Palette", columns, scenes, sceneList: numberedScenes(scenes) });
 }
 
 // 行に意味が無いセットは、行番号だけ入れておく（Live の既定は空名でシーンが見分けにくい）
@@ -289,7 +311,7 @@ function build({ libRoot, outRoot, keys, sets = Object.keys(SETS), dryRun = fals
       if (!SETS[s]) throw new Error(`知らないセット: ${s}（${Object.keys(SETS).join(" / ")}）`);
       if (dryRun) { results.push({ key: keyName, set: s, output: path.join(projectDir, `${s}_.als`), dryRun: true }); continue; }
       const r = SETS[s]({ keyDir, libRoot, keyName, projectDir });
-      if (r) { results.push({ key: keyName, ...r }); console.log(`  ${keyName} / ${r.name}: ${r.tracks} 列 × ${r.scenes} 行 → ${r.clips} クリップ`); }
+      if (r) { results.push({ key: keyName, ...r }); console.log(`  ${keyName} / ${r.name}: ${r.tracks} 列（うちグループ ${r.groups} 組）× ${r.scenes} 行 → ${r.clips} クリップ`); }
       else console.warn(`  警告: ${keyName} / ${s} は素材が無いので飛ばしました`);
     }
   }

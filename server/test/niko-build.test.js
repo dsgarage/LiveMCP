@@ -83,6 +83,11 @@ test("01_Ideas は Chords / Chords Pad / DRY / WET の 4 列で、シーンに�
   assert.deepStrictEqual(
     listTracks(xml).filter((t) => t.tag === "MidiTrack").map((t) => t.name),
     ["Chords", "Chords Pad", "Idea DRY", "Idea WET"]);
+  // Chords とその相方はグループにまとまる（グループのスロットを発火すると 2 本同時に鳴る）
+  const groups = listTracks(xml).filter((t) => t.tag === "GroupTrack");
+  assert.deepStrictEqual(groups.map((t) => t.name), ["Chords"]);
+  const inGroup = listTracks(xml).filter((t) => t.groupId === groups[0].id).map((t) => t.name);
+  assert.deepStrictEqual(inGroup, ["Chords", "Chords Pad"]);
   assert.strictEqual(countScenes(xml), 3);
 
   const scenes = [...xml.matchAll(/<Scene Id="\d+">[\s\S]*?<Name Value="([^"]*)"[\s\S]*?<Tempo Value="([^"]*)" \/>\s*<IsTempoEnabled Value="(\w+)"/g)]
@@ -100,7 +105,7 @@ test("01_Ideas は Chords / Chords Pad / DRY / WET の 4 列で、シーンに�
   assert.strictEqual(/<ClipEnvelope /.test(body(tracks[2])), false, "DRY 列にペダルは無い");
   assert.ok(/<ClipEnvelope /.test(body(tracks[3])), "WET 列にペダルが乗る");
 
-  // 楽器: コードのパッド列だけ Drift、他はピアノ（Simpler）
+  // 楽器: コード列のパッド側だけ Drift、他はピアノ（Simpler）
   const inst = (t) => (/<Devices>\s*<([A-Za-z][\w.]*)/.exec(body(t)) || [])[1] || "なし";
   assert.deepStrictEqual(tracks.map(inst), ["OriginalSimpler", "Drift", "OriginalSimpler", "OriginalSimpler"]);
   // プリセット由来の MIDI マッピングは残さない（残すと Live が落ちる。#22）
