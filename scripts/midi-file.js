@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// Standard MIDI File（.mid）からノートだけを読む。
+// Standard MIDI File（.mid）からノートとコントロールチェンジを読む。
 //
 //   notes … [{ pitch, time, duration, velocity }]  time / duration は拍（4 分音符 = 1）
+//   ccs   … [{ controller, time, value }]          時刻順。ペダル（CC64）などの表現
 //   beats … 最後のノートが終わる拍
 //
 // Live の MidiClip は拍で持つのでテンポは無視する（クリップはセットのテンポで鳴る）。
@@ -20,7 +21,7 @@ function readVarLen(buf, pos) {
   return [value, pos];
 }
 
-function parseTrack(buf, start, end, ppq, notes) {
+function parseTrack(buf, start, end, ppq, notes, ccs) {
   let pos = start;
   let tick = 0;
   let status = 0;
@@ -61,7 +62,12 @@ function parseTrack(buf, start, end, ppq, notes) {
       }
       continue;
     }
-    if (type === 0xa0 || type === 0xb0 || type === 0xe0) { pos += 2; continue; }
+    if (type === 0xb0) { // コントロールチェンジ
+      const controller = buf[pos++], value = buf[pos++];
+      ccs.push({ controller, time: tick / ppq, value });
+      continue;
+    }
+    if (type === 0xa0 || type === 0xe0) { pos += 2; continue; }
     if (type === 0xc0 || type === 0xd0) { pos += 1; continue; }
     throw new Error(`不明なステータス 0x${status.toString(16)} at ${pos}`);
   }
@@ -81,16 +87,18 @@ function parseMidi(file) {
   const ppq = division;
 
   const notes = [];
+  const ccs = [];
   let pos = 8 + headerLen;
   for (let i = 0; i < ntracks && pos + 8 <= buf.length; i++) {
     if (buf.toString("ascii", pos, pos + 4) !== "MTrk") throw new Error("MTrk が見つかりません: " + file);
     const len = buf.readUInt32BE(pos + 4);
-    parseTrack(buf, pos + 8, pos + 8 + len, ppq, notes);
+    parseTrack(buf, pos + 8, pos + 8 + len, ppq, notes, ccs);
     pos += 8 + len;
   }
   notes.sort((a, b) => a.time - b.time || a.pitch - b.pitch);
+  ccs.sort((a, b) => a.time - b.time || a.controller - b.controller);
   const beats = notes.reduce((m, n) => Math.max(m, n.time + n.duration), 0);
-  return { ppq, notes, beats };
+  return { ppq, notes, ccs, beats };
 }
 
 module.exports = { parseMidi };
@@ -98,6 +106,7 @@ module.exports = { parseMidi };
 if (require.main === module) {
   for (const f of process.argv.slice(2)) {
     const r = parseMidi(f);
-    console.log(f, `ppq ${r.ppq} / notes ${r.notes.length} / ${r.beats.toFixed(2)} 拍`);
+    const used = [...new Set(r.ccs.map((c) => c.controller))].sort((a, b) => a - b);
+    console.log(f, `ppq ${r.ppq} / notes ${r.notes.length} / cc ${r.ccs.length}${used.length ? " [" + used.join(",") + "]" : ""} / ${r.beats.toFixed(2)} 拍`);
   }
 }

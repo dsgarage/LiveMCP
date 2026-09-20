@@ -31,7 +31,7 @@
 												</TimeSignatures>
 											</TimeSignature>
 											<Envelopes>
-												<Envelopes />
+__ENVELOPES__
 											</Envelopes>
 											<ScrollerTimePreserver>
 <LeftTime Value="0" />
