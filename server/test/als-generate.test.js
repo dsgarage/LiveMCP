@@ -344,7 +344,8 @@ test("既定では CC64 だけを書き、枠の無い CC は落とす（#19）"
   const f = midiOnDisk(dir, "mod.mid", [
     [0, 0xb0, 1, 40],            // モジュレーション（既定の対象外）
     [0, 0x90, 60, 100],
-    [96, 0x80, 60, 64],
+    [96, 0xb0, 1, 90],           // 値が変わるので中身のあるエンベロープになる
+    [0, 0x80, 60, 64],
     [0, 0xff, 0x2f, 0],
   ]);
   const off = midiTrack({ id: 20, name: "mod", color: 0, files: [f], scenes: 1, pid: makePidAllocator(84000) });
@@ -356,5 +357,23 @@ test("既定では CC64 だけを書き、枠の無い CC は落とす（#19）"
   assert.strictEqual(ccPlaceholder(1), "__PID21__");
   assert.strictEqual(pointee[1], target[1]);
   assert.strictEqual(target[2], "1");
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("値が一度も変わらない CC はエンベロープにしない（#19）", () => {
+  // Live は中身の無いエンベロープを読み込み時に破棄するが、
+  // トラックに楽器が載っているとその破棄の途中で落ちる（Live 12.4.5 で実測）
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "als-cc-"));
+  const held = midiOnDisk(dir, "held.mid", [
+    [0, 0xb0, 64, 127],          // 踏んだまま最後まで変わらない
+    [0, 0x90, 60, 100],
+    [192, 0xb0, 64, 127],        // 同じ値の再送信も「変化」ではない
+    [0, 0x80, 60, 64],
+    [0, 0xff, 0x2f, 0],
+  ]);
+  const xml = midiTrack({ id: 20, name: "held", color: 0, files: [held], scenes: 1, pid: makePidAllocator(84000) });
+  assert.strictEqual(/<ClipEnvelope /.test(xml), false);
+  assert.ok(/<Envelopes \/>/.test(xml));
+  // LockEnvelope は見ない。テンプレート（Live が書いた実物）で 66 は元から 1 になっている
   fs.rmSync(dir, { recursive: true, force: true });
 });

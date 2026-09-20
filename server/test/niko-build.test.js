@@ -74,7 +74,7 @@ test("キーを列挙し、キーごとに 1 プロジェクトへ書く（#20�
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test("01_Ideas は Chords / DRY / WET の 3 列で、シーンにアイデアの BPM が入る（#20）", () => {
+test("01_Ideas は Chords / Chords Pad / DRY / WET の 4 列で、シーンにアイデアの BPM が入る（#20）", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "niko-"));
   fakeLibrary(root);
   build({ libRoot: root, outRoot: out(root), sets: ["01"] });
@@ -82,7 +82,7 @@ test("01_Ideas は Chords / DRY / WET の 3 列で、シーンにアイデアの
 
   assert.deepStrictEqual(
     listTracks(xml).filter((t) => t.tag === "MidiTrack").map((t) => t.name),
-    ["Chords", "Idea DRY", "Idea WET"]);
+    ["Chords", "Chords Pad", "Idea DRY", "Idea WET"]);
   assert.strictEqual(countScenes(xml), 3);
 
   const scenes = [...xml.matchAll(/<Scene Id="\d+">[\s\S]*?<Name Value="([^"]*)"[\s\S]*?<Tempo Value="([^"]*)" \/>\s*<IsTempoEnabled Value="(\w+)"/g)]
@@ -93,12 +93,19 @@ test("01_Ideas は Chords / DRY / WET の 3 列で、シーンにアイデアの
     ["03 No Bpm Here", "120", "false"], // BPM がフォルダ名に無ければシーンテンポは無効のまま
   ]);
 
-  // ペダルは WET の列にだけ乗る
   const tracks = listTracks(xml).filter((t) => t.tag === "MidiTrack");
   const body = (t) => xml.slice(t.start, t.end);
+  // ペダルは WET の列にだけ乗る
   assert.strictEqual(/<ClipEnvelope /.test(body(tracks[0])), false, "Chords 列にペダルは無い");
-  assert.strictEqual(/<ClipEnvelope /.test(body(tracks[1])), false, "DRY 列にペダルは無い");
-  assert.ok(/<ClipEnvelope /.test(body(tracks[2])), "WET 列にペダルが乗る");
+  assert.strictEqual(/<ClipEnvelope /.test(body(tracks[2])), false, "DRY 列にペダルは無い");
+  assert.ok(/<ClipEnvelope /.test(body(tracks[3])), "WET 列にペダルが乗る");
+
+  // 既定では楽器を載せない（#22。preset 形式のデバイスを置くと Live が落ちる）
+  assert.deepStrictEqual(tracks.map((t) => /<Devices \/>/.test(body(t))), [true, true, true, true]);
+
+  // Chords Pad は Chords と同じクリップを同じ行に持つ（シーンを発火すると重なる）
+  const names = (t) => [...body(t).matchAll(/<MidiClip[\s\S]*?<Name Value="([^"]*)"/g)].map((m) => m[1]);
+  assert.deepStrictEqual(names(tracks[1]), names(tracks[0]));
   fs.rmSync(root, { recursive: true, force: true });
 });
 
@@ -137,4 +144,17 @@ test("並び順は数字を数として見る", () => {
 test("クリップ名から作者名と DRY / WET を落とす", () => {
   assert.strictEqual(clipName("/x/Niko_Kotoulas_Emotional_Melody_1_Am-G_100-140bpm_DRY.mid"), "Emotional_Melody_1_Am-G_100-140bpm");
   assert.strictEqual(clipName("/x/1_Beautiful_Dm9-Am9_Niko_Kotoulas.mid"), "1_Beautiful_Dm9-Am9");
+});
+
+test("--instruments を付けたときだけ楽器チェーンが載る（#22・封印中）", () => {
+  // preset 形式のデバイスを置いた .als は Live が読み込み直後に落ちるため既定はオフ。
+  // 仕組み自体が壊れていないことだけを見ておく
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "niko-"));
+  fakeLibrary(root);
+  build({ libRoot: root, outRoot: out(root), sets: ["01"], instruments: true });
+  const xml = readAls(setPath(root, "01_Ideas.als"));
+  const tracks = listTracks(xml).filter((t) => t.tag === "MidiTrack");
+  const inst = (t) => (/<Devices>\s*<([A-Za-z][\w.]*)/.exec(xml.slice(t.start, t.end)) || [])[1] || "なし";
+  assert.deepStrictEqual(tracks.map(inst), ["OriginalSimpler", "Drift", "OriginalSimpler", "OriginalSimpler"]);
+  fs.rmSync(root, { recursive: true, force: true });
 });

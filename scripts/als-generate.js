@@ -22,6 +22,7 @@ const { audioInfo } = require("./audio-info");
 const { parseSampleName, compareSamples, centralBpm } = require("./sample-meta");
 const { parseMidi } = require("./midi-file");
 const { classifySample, decideKind } = require("./sample-kind");
+const { instrumentChain } = require("./device-preset");
 const { LoopcloudDb } = require("./loopcloud-db");
 
 const TEMPLATE_DIR = path.join(__dirname, "..", "templates");
@@ -289,6 +290,8 @@ function ccPlaceholder(cc) {
 
 // CC の値変化を Live の階段状オートメーションに直す。
 // 値が変わる時刻に「変わる前の値」「変わった後の値」を 2 点打つのが Live の書き方。
+// 値が一度も変わらないものは null を返す。Live はそれを「空のエンベロープ」として
+// 破棄するうえ、トラックに楽器が載っていると破棄の途中で落ちる（実測）
 function ccEventsXml(events, indent) {
   const T = (n) => "\t".repeat(n);
   const sorted = [...events].sort((a, b) => a.time - b.time);
@@ -305,7 +308,7 @@ function ccEventsXml(events, indent) {
     out.push(`${T(indent)}<FloatEvent Id="${id++}" Time="${sorted[i].time}" Value="${sorted[i].value}" />`);
     prev = sorted[i].value;
   }
-  return out.join("\n");
+  return out.length > 1 ? out.join("\n") : null;
 }
 
 // クリップの <Envelopes> の中身。使った CC は usedCcs に足す（トラック側の LockEnvelope 用）
@@ -322,6 +325,8 @@ function envelopesXml(ccs, { ccList = DEFAULT_ENVELOPE_CCS, usedCcs } = {}) {
   for (const cc of [...byCc.keys()].sort((a, b) => a - b)) {
     const ph = ccPlaceholder(cc);
     if (!ph) continue; // テンプレートに枠が無い CC は落とす（壊れた .als を書かない）
+    const events = ccEventsXml(byCc.get(cc), 15);
+    if (!events) continue; // 値が変わらないものは書かない
     if (usedCcs) usedCcs.add(cc);
     blocks.push([
       `${T(12)}<ClipEnvelope Id="${envId++}">`,
@@ -330,7 +335,7 @@ function envelopesXml(ccs, { ccList = DEFAULT_ENVELOPE_CCS, usedCcs } = {}) {
       `${T(13)}</EnvelopeTarget>`,
       `${T(13)}<Automation>`,
       `${T(14)}<Events>`,
-      ccEventsXml(byCc.get(cc), 15),
+      events,
       `${T(14)}</Events>`,
       `${T(14)}<AutomationTransformViewState>`,
       `${T(15)}<IsTransformPending Value="false" />`,
@@ -367,19 +372,43 @@ function midiClipSlot(index, file, color, { name, ccList, usedCcs } = {}) {
     .replace(/__NEXTNOTEID__/g, String(kt.nextNoteId));
 }
 
-function midiTrack({ id, name, color, files, scenes, pid, ccList, clipNames }) {
+// ---- トラックの楽器（#22）----
+// Core Library のプリセットから取り出したチェーンを <Devices> に置く。
+// プリセット側の __PID<n>__ は、トラックのテンプレートが使っている番号とぶつからないよう
+// テンプレートの最大値の先から振る（pid.apply は番号ごとに 1 つの id を配る）
+let trackPidBaseCache = null;
+function trackPidBase() {
+  if (trackPidBaseCache == null) {
+    const used = [...tpl("midi-track.xml").matchAll(/__PID(\d+)__/g)].map((m) => Number(m[1]));
+    trackPidBaseCache = Math.max(...used) + 1;
+  }
+  return trackPidBaseCache;
+}
+
+const chainCache = new Map();
+// プリセットのパス → <Devices> に入れるチェーン XML。同じプリセットは読み直さない
+function deviceChain(preset, opts = {}) {
+  if (!preset) return null;
+  const key = preset + (opts.instrumentOnly ? "#only" : "");
+  if (!chainCache.has(key)) chainCache.set(key, instrumentChain(preset, { indent: 7, pidStart: trackPidBase(), ...opts }));
+  return chainCache.get(key);
+}
+
+function midiTrack({ id, name, color, files, scenes, pid, ccList, clipNames, preset, presetOpts }) {
   const slots = [], freeze = [];
   const usedCcs = new Set();
   for (let i = 0; i < scenes; i++) {
     slots.push(files[i] ? midiClipSlot(i, files[i], color, { name: clipNames && clipNames[i], ccList, usedCcs }) : emptySlot(i));
     freeze.push(emptySlot(i));
   }
+  const chain = deviceChain(preset, presetOpts);
   let block = tpl("midi-track.xml")
     .replace(/__ID__/g, String(id))
     .replace(/__NAME__/g, escapeAttr(name))
     .replace(/__COLOR__/g, String(color))
     .replace("__SLOTS__", slots.join("\n"))
-    .replace("__FREEZE_SLOTS__", freeze.join("\n"));
+    .replace("__FREEZE_SLOTS__", freeze.join("\n"))
+    .replace("__DEVICES__", chain ? `<Devices>\n${chain.xml}\n${"\t".repeat(6)}</Devices>` : "<Devices />");
   // クリップがエンベロープを持つ CC は、トラック側の ControllerTargets を LockEnvelope=1 にする
   for (const cc of usedCcs) {
     const n = cc + CC_TARGET_OFFSET;
@@ -635,7 +664,7 @@ function generate({ packDir, output, loops = [], oneshots = [], name, baseSet = 
   };
 }
 
-module.exports = { generate, collect, collectSongs, roleAndSong, orderRoles, trackNameOf, audioClipSlot, drumBranch, midiClipSlot, midiTrack, emptySlot, scenesBlock, makePidAllocator, envelopesXml, ccPlaceholder };
+module.exports = { generate, collect, collectSongs, roleAndSong, orderRoles, trackNameOf, audioClipSlot, drumBranch, midiClipSlot, midiTrack, emptySlot, deviceChain, scenesBlock, makePidAllocator, envelopesXml, ccPlaceholder };
 
 if (require.main === module) {
   const argv = process.argv.slice(2);

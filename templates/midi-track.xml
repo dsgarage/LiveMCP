@@ -775,7 +775,7 @@ __FREEZE_SLOTS__
 						</Recorder>
 					</FreezeSequencer>
 					<DeviceChain>
-						<Devices />
+						__DEVICES__
 						<SignalModulations />
 					</DeviceChain>
 				</DeviceChain>

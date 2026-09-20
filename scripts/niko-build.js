@@ -2,7 +2,7 @@
 // キー別 × カテゴリ別に整理された MIDI 素材ライブラリを、
 // セッションビューで引ける .als 群に落とす（#20）。
 //
-//   node scripts/niko-build.js <ライブラリのルート> <出力先> [--keys "C Major - A Minor,..."] [--sets 01,03] [--dry-run]
+//   node scripts/niko-build.js <ライブラリのルート> <出力先> [--keys "C Major - A Minor,..."] [--sets 01,03] [--dry-run] [--instruments]
 //
 // 3 軸の役割:
 //   プロジェクト = キー … 曲を書くときは調が先に決まる。12 調は移調コピーなので同時に見る意味がない
@@ -20,10 +20,28 @@ const fs = require("node:fs");
 const path = require("node:path");
 const als = require("./als");
 const { midiTrack, scenesBlock, makePidAllocator } = require("./als-generate");
+const { assertValid } = require("./als-validate");
 
 const TEMPLATE_DIR = path.join(__dirname, "..", "templates");
 const BASE_SET = path.join(TEMPLATE_DIR, "live-set.xml");
 const MAIN_PACK = "Niko_MIDI_Pack";
+
+// トラックに載せる楽器（#22）。既定では載せない。
+// Core Library のプリセットから取り出したデバイスをトラックの <Devices> に置くと、
+// XML としては正しく Live も一度は読み込むが、その直後に必ず落ちる（Live 12.4.5 で実測）。
+// 楽器 1 台だけに削っても落ちるので、preset 形式のデバイスは set 形式と互換ではない。
+// Live が書いた「プレーンな MIDI トラックに載った同じ楽器」の実物が取れるまで封印する。
+// --instruments を付けたときだけ載せる（検証用）。
+// Core Library の中で最も軽い組み合わせ:
+//   Ac Piano Upright   … Simpler 1 台 + サンプル 1 本（OriginalSimpler → ChannelEq → Reverb）
+//   Classic Ensemble Pad … Drift 1 台（Drift → ChannelEq → Chorus2）
+// ラックの殻は使わず、中のチェーンだけを直列で置く（device-preset.js 参照）
+const CORE_RACKS = "/Applications/Ableton Live 12 Suite.app/Contents/App-Resources/Core Library/Racks/Instrument Racks";
+const PIANO = path.join(CORE_RACKS, "Piano & Keys", "Ac Piano Upright.adg");
+const PAD = path.join(CORE_RACKS, "Pad", "Classic Ensemble Pad.adg");
+const preset = (p) => (withInstruments && fs.existsSync(p) ? p : null);
+const PRESET_OPTS = { instrumentOnly: process.env.NIKO_INSTRUMENT_ONLY === "1" };
+let withInstruments = false; // --instruments で有効になる（既定はオフ = 楽器なし）
 const CHORD_PACK = "2000_NikoChord_Pack";
 const KEY_DIR = /^(.+ Major) - (.+ Minor)$/;
 
@@ -112,15 +130,17 @@ function numberedDirs(dir) {
 const toFile = (p) => ({ path: p, meta: { stem: clipName(p) } });
 
 // トラック 1 本ぶんの指定。files は null 詰めの配列（null は空スロット）
-function column(name, files, names) {
+function column(name, files, names, instrument = PIANO) {
   const list = files.map((f) => (f ? toFile(f) : null));
-  return { name, files: list, clipNames: names || files.map((f) => (f ? clipName(f) : "")) };
+  return { name, files: list, clipNames: names || files.map((f) => (f ? clipName(f) : "")), preset: preset(instrument) };
 }
 
-function fromDir(name, dir) {
-  const files = midsIn(dir);
-  return column(name, files);
+function fromDir(name, dir, instrument) {
+  return column(name, midsIn(dir), null, instrument);
 }
+
+// クリップの無いパッド用トラック。コードのクリップをここへコピーすれば重ねられる
+const padColumn = () => ({ name: "PAD", files: [], clipNames: [], preset: preset(PAD) });
 
 function buildSet({ output, name, columns, scenes, sceneList, tempo }) {
   const filled = columns.reduce((n, c) => n + c.files.filter(Boolean).length, 0);
@@ -137,12 +157,12 @@ function buildSet({ output, name, columns, scenes, sceneList, tempo }) {
   const pid = makePidAllocator(basePointee);
   let trackId = Math.max(...als.listTracks(xml).map((t) => t.id), 10) + 1;
   const blocks = columns.map((c, i) =>
-    midiTrack({ id: trackId++, name: c.name, color: (i * 7) % 60, files: c.files, scenes, pid, clipNames: c.clipNames }));
+    midiTrack({ id: trackId++, name: c.name, color: (i * 7) % 60, files: c.files, scenes, pid, clipNames: c.clipNames, preset: c.preset, presetOpts: PRESET_OPTS }));
 
   const firstReturn = als.listTracks(xml).find((t) => t.tag === "ReturnTrack");
   xml = xml.slice(0, firstReturn.start) + blocks.join("\n") + "\n" + xml.slice(firstReturn.start);
   xml = xml.replace(/<NextPointeeId Value="\d+" \/>/, `<NextPointeeId Value="${pid.next}" />`);
-  if (/__[A-Z_]+\d*__/.test(xml)) throw new Error("置換し残し: " + /__[A-Z_]+\d*__/.exec(xml)[0]);
+  assertValid(xml, `${path.basename(path.dirname(output))} / ${name}`);
 
   fs.mkdirSync(path.dirname(output), { recursive: true });
   fs.mkdirSync(path.join(path.dirname(output), "Ableton Project Info"), { recursive: true });
@@ -173,6 +193,7 @@ function setIdeas(keyDir, output) {
     tempo: bpms.length ? bpms[Math.floor(bpms.length / 2)] : 120,
     columns: [
       column("Chords", chords),
+      column("Chords Pad", chords, null, PAD), // 同じ行に置くので、シーンを発火すると和音が重なる
       column("Idea DRY", dry),
       column("Idea WET", wet),
     ],
@@ -203,7 +224,7 @@ function setChords(keyDir, libRoot, keyName, output) {
     fromDir("Rhythmic", path.join(bonus, "3 - Rhythmic Chord Progressions")),
   ].filter((c) => c.files.some(Boolean));
   const scenes = Math.max(8, ...columns.map((c) => c.files.length));
-  return buildSet({ output, name: "02_Chords", columns, scenes, sceneList: numberedScenes(scenes) });
+  return buildSet({ output, name: "02_Chords", columns: [...columns, padColumn()], scenes, sceneList: numberedScenes(scenes) });
 }
 
 // 03_Melodies … Melody / Starter は DRY・WET を同じ行に揃える。Extras は BPM 帯ごとの列
@@ -235,7 +256,7 @@ function setPalette(keyDir, output) {
     fromDir("Extra Chords", path.join(bonus, "7 - More Extras", "Chords")),
   ].filter((c) => c.files.some(Boolean));
   const scenes = Math.max(8, ...columns.map((c) => c.files.length));
-  return buildSet({ output, name: "04_Palette", columns, scenes, sceneList: numberedScenes(scenes) });
+  return buildSet({ output, name: "04_Palette", columns: [...columns, padColumn()], scenes, sceneList: numberedScenes(scenes) });
 }
 
 // 行に意味が無いセットは、行番号だけ入れておく（Live の既定は空名でシーンが見分けにくい）
@@ -259,7 +280,8 @@ function listKeys(libRoot) {
     .sort();
 }
 
-function build({ libRoot, outRoot, keys, sets = Object.keys(SETS), dryRun = false }) {
+function build({ libRoot, outRoot, keys, sets = Object.keys(SETS), dryRun = false, instruments = false }) {
+  withInstruments = instruments;
   const all = listKeys(libRoot);
   const targets = keys && keys.length ? keys.filter((k) => all.includes(k)) : all;
   if (!targets.length) throw new Error(`対象のキーがありません（候補: ${all.join(" / ")}）`);
@@ -287,7 +309,7 @@ if (require.main === module) {
   const positional = argv.filter((a, i) => !a.startsWith("--") && !(i > 0 && argv[i - 1].startsWith("--") && argv[i - 1] !== "--dry-run"));
   const [libRoot, outRoot] = positional;
   if (!libRoot || !outRoot) {
-    console.error("使い方: node scripts/niko-build.js <ライブラリのルート> <出力先> [--keys \"C Major - A Minor,...\"] [--sets 01,03] [--dry-run]");
+    console.error("使い方: node scripts/niko-build.js <ライブラリのルート> <出力先> [--keys \"C Major - A Minor,...\"] [--sets 01,03] [--dry-run] [--instruments]");
     process.exit(1);
   }
   const keys = (flag("--keys") || "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -296,6 +318,7 @@ if (require.main === module) {
   const r = build({
     libRoot: path.resolve(libRoot), outRoot: path.resolve(outRoot),
     keys, sets: sets.length ? sets : undefined, dryRun: argv.includes("--dry-run"),
+    instruments: argv.includes("--instruments"),
   });
   const clips = r.reduce((n, x) => n + (x.clips || 0), 0);
   console.log(`\n${r.length} セット / ${clips} クリップ を ${((Date.now() - t0) / 1000).toFixed(1)} 秒で書きました → ${path.resolve(outRoot)}`);
