@@ -85,6 +85,23 @@ function deviceOf(presetBlock) {
   return elementAt(inner, i);
 }
 
+// プリセットが持っている MIDI マッピング（<KeyMidi>）を落とす。
+// Live が書いたセットのデバイスにはこれが無く、セット側のマッピング表に登録も無い。
+// 残したまま置くと、MIDI Ctrl のテーブルを走査したとき（= クリップに CC エンベロープが
+// あるとき）に不正な参照になって Live が落ちる（Live 12.4.5 で実測）
+function stripKeyMidi(block) {
+  let out = block, at;
+  while ((at = out.indexOf("<KeyMidi>")) >= 0) {
+    const el = elementAt(out, at);
+    // 直前の改行とインデントごと取り除く
+    let start = at;
+    while (start > 0 && (out[start - 1] === "\t" || out[start - 1] === " ")) start--;
+    if (out[start - 1] === "\n") start--;
+    out = out.slice(0, start) + out.slice(at + el.length);
+  }
+  return out;
+}
+
 // 行頭のタブを from → to に付け替える（入れ子の深い行は差分を保ったままずれる）
 function reindent(block, from, to) {
   if (from === to) return block;
@@ -120,7 +137,7 @@ function instrumentChain(file, { indent = 7, pidStart = 0, dropBeforeInstrument 
   }
   if (!presets.length) throw new Error("デバイスが取れません: " + file);
 
-  let devices = presets.map((p) => deviceOf(p));
+  let devices = presets.map((p) => stripKeyMidi(deviceOf(p)));
   if (dropBeforeInstrument) {
     const at = devices.findIndex((d) => INSTRUMENTS.has(/^<([A-Za-z][\w.]*)/.exec(d)[1]));
     if (at < 0) throw new Error("楽器が見つかりません: " + file);
@@ -137,14 +154,16 @@ function instrumentChain(file, { indent = 7, pidStart = 0, dropBeforeInstrument 
     // 「Non-unique list ids」で開かない。プリセットはどれも Id="0" なので振り直す
     return "\t".repeat(indent) + r.xml.replace(/^<([A-Za-z][\w.]*) Id="\d+"/, `<$1 Id="${i}"`);
   });
+  const chainXml = parts.join("\n");
+  if (chainXml.includes("<KeyMidi>")) throw new Error("KeyMidi が残っている（Live が落ちる）: " + file);
   return {
-    xml: parts.join("\n"),
+    xml: chainXml,
     pointees: n - pidStart,
     names: devices.map((d) => /^<([A-Za-z][\w.]*)/.exec(d)[1]),
   };
 }
 
-module.exports = { INSTRUMENTS, instrumentChain, readPreset, elementAt, childElements, deviceOf, reindent, pidify };
+module.exports = { INSTRUMENTS, instrumentChain, stripKeyMidi, readPreset, elementAt, childElements, deviceOf, reindent, pidify };
 
 if (require.main === module) {
   const [file, ind] = process.argv.slice(2);

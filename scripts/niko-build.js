@@ -2,7 +2,7 @@
 // キー別 × カテゴリ別に整理された MIDI 素材ライブラリを、
 // セッションビューで引ける .als 群に落とす（#20）。
 //
-//   node scripts/niko-build.js <ライブラリのルート> <出力先> [--keys "C Major - A Minor,..."] [--sets 01,03] [--dry-run] [--instruments]
+//   node scripts/niko-build.js <ライブラリのルート> <出力先> [--keys "C Major - A Minor,..."] [--sets 01,03] [--dry-run] [--no-instruments]
 //
 // 3 軸の役割:
 //   プロジェクト = キー … 曲を書くときは調が先に決まる。12 調は移調コピーなので同時に見る意味がない
@@ -26,13 +26,8 @@ const TEMPLATE_DIR = path.join(__dirname, "..", "templates");
 const BASE_SET = path.join(TEMPLATE_DIR, "live-set.xml");
 const MAIN_PACK = "Niko_MIDI_Pack";
 
-// トラックに載せる楽器（#22）。既定では載せない。
-// Core Library のプリセットから取り出したデバイスをトラックの <Devices> に置くと、
-// XML としては正しく Live も一度は読み込むが、その直後に必ず落ちる（Live 12.4.5 で実測）。
-// 楽器 1 台だけに削っても落ちるので、preset 形式のデバイスは set 形式と互換ではない。
-// Live が書いた「プレーンな MIDI トラックに載った同じ楽器」の実物が取れるまで封印する。
-// --instruments を付けたときだけ載せる（検証用）。
-// Core Library の中で最も軽い組み合わせ:
+// トラックに載せる楽器（#22）。Core Library の中で最も軽い組み合わせ。
+// --no-instruments で外せる。
 //   Ac Piano Upright   … Simpler 1 台 + サンプル 1 本（OriginalSimpler → ChannelEq → Reverb）
 //   Classic Ensemble Pad … Drift 1 台（Drift → ChannelEq → Chorus2）
 // ラックの殻は使わず、中のチェーンだけを直列で置く（device-preset.js 参照）
@@ -41,7 +36,7 @@ const PIANO = path.join(CORE_RACKS, "Piano & Keys", "Ac Piano Upright.adg");
 const PAD = path.join(CORE_RACKS, "Pad", "Classic Ensemble Pad.adg");
 const preset = (p) => (withInstruments && fs.existsSync(p) ? p : null);
 const PRESET_OPTS = { instrumentOnly: process.env.NIKO_INSTRUMENT_ONLY === "1" };
-let withInstruments = false; // --instruments で有効になる（既定はオフ = 楽器なし）
+let withInstruments = true; // --no-instruments で外せる
 const CHORD_PACK = "2000_NikoChord_Pack";
 const KEY_DIR = /^(.+ Major) - (.+ Minor)$/;
 
@@ -280,7 +275,7 @@ function listKeys(libRoot) {
     .sort();
 }
 
-function build({ libRoot, outRoot, keys, sets = Object.keys(SETS), dryRun = false, instruments = false }) {
+function build({ libRoot, outRoot, keys, sets = Object.keys(SETS), dryRun = false, instruments = true }) {
   withInstruments = instruments;
   const all = listKeys(libRoot);
   const targets = keys && keys.length ? keys.filter((k) => all.includes(k)) : all;
@@ -309,7 +304,7 @@ if (require.main === module) {
   const positional = argv.filter((a, i) => !a.startsWith("--") && !(i > 0 && argv[i - 1].startsWith("--") && argv[i - 1] !== "--dry-run"));
   const [libRoot, outRoot] = positional;
   if (!libRoot || !outRoot) {
-    console.error("使い方: node scripts/niko-build.js <ライブラリのルート> <出力先> [--keys \"C Major - A Minor,...\"] [--sets 01,03] [--dry-run] [--instruments]");
+    console.error("使い方: node scripts/niko-build.js <ライブラリのルート> <出力先> [--keys \"C Major - A Minor,...\"] [--sets 01,03] [--dry-run] [--no-instruments]");
     process.exit(1);
   }
   const keys = (flag("--keys") || "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -318,7 +313,7 @@ if (require.main === module) {
   const r = build({
     libRoot: path.resolve(libRoot), outRoot: path.resolve(outRoot),
     keys, sets: sets.length ? sets : undefined, dryRun: argv.includes("--dry-run"),
-    instruments: argv.includes("--instruments"),
+    instruments: !argv.includes("--no-instruments"),
   });
   const clips = r.reduce((n, x) => n + (x.clips || 0), 0);
   console.log(`\n${r.length} セット / ${clips} クリップ を ${((Date.now() - t0) / 1000).toFixed(1)} 秒で書きました → ${path.resolve(outRoot)}`);

@@ -288,6 +288,12 @@ function ccPlaceholder(cc) {
   return pid == null ? null : `__PID${pid}__`;
 }
 
+// クリップの ClipEnvelope が指す先は、ポインタ id を配り終えた後で埋める。
+// クリップは <MidiControllers> より前に書かれるので、ここで直接 __PID<n>__ を使うと
+// その id だけ先に消費され、ControllerTargets の id が連番でなくなる。
+// Live はこの並びを前提にしているらしく、トラックに楽器があると落ちる（実測）
+const ccMarker = (cc) => `__CCTARGET${cc}__`;
+
 // CC の値変化を Live の階段状オートメーションに直す。
 // 値が変わる時刻に「変わる前の値」「変わった後の値」を 2 点打つのが Live の書き方。
 // 値が一度も変わらないものは null を返す。Live はそれを「空のエンベロープ」として
@@ -331,7 +337,7 @@ function envelopesXml(ccs, { ccList = DEFAULT_ENVELOPE_CCS, usedCcs } = {}) {
     blocks.push([
       `${T(12)}<ClipEnvelope Id="${envId++}">`,
       `${T(13)}<EnvelopeTarget>`,
-      `${T(14)}<PointeeId Value="${ph}" />`,
+      `${T(14)}<PointeeId Value="${ccMarker(cc)}" />`,
       `${T(13)}</EnvelopeTarget>`,
       `${T(13)}<Automation>`,
       `${T(14)}<Events>`,
@@ -416,7 +422,15 @@ function midiTrack({ id, name, color, files, scenes, pid, ccList, clipNames, pre
       new RegExp(`(<ControllerTargets\\.${n} Id="__PID\\d+__">\\s*<LockEnvelope Value=")0(")`),
       "$11$2");
   }
-  return pid.apply(block);
+  let out = pid.apply(block);
+  // ポインタ id を配り終えてから、エンベロープの指す先を実際の id で埋める
+  for (const cc of usedCcs) {
+    const n = cc + CC_TARGET_OFFSET;
+    const hit = new RegExp(`<ControllerTargets\\.${n} Id="(\\d+)"`).exec(out);
+    if (!hit) throw new Error(`ControllerTargets.${n} が見つかりません（CC${cc}）`);
+    out = out.split(ccMarker(cc)).join(hit[1]);
+  }
+  return out;
 }
 
 // ---- 曲キット型パック（Singomakers Emotional Piano 等）----

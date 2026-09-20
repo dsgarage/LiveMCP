@@ -100,8 +100,11 @@ test("01_Ideas は Chords / Chords Pad / DRY / WET の 4 列で、シーンに�
   assert.strictEqual(/<ClipEnvelope /.test(body(tracks[2])), false, "DRY 列にペダルは無い");
   assert.ok(/<ClipEnvelope /.test(body(tracks[3])), "WET 列にペダルが乗る");
 
-  // 既定では楽器を載せない（#22。preset 形式のデバイスを置くと Live が落ちる）
-  assert.deepStrictEqual(tracks.map((t) => /<Devices \/>/.test(body(t))), [true, true, true, true]);
+  // 楽器: コードのパッド列だけ Drift、他はピアノ（Simpler）
+  const inst = (t) => (/<Devices>\s*<([A-Za-z][\w.]*)/.exec(body(t)) || [])[1] || "なし";
+  assert.deepStrictEqual(tracks.map(inst), ["OriginalSimpler", "Drift", "OriginalSimpler", "OriginalSimpler"]);
+  // プリセット由来の MIDI マッピングは残さない（残すと Live が落ちる。#22）
+  assert.strictEqual(/<KeyMidi>/.test(xml), false);
 
   // Chords Pad は Chords と同じクリップを同じ行に持つ（シーンを発火すると重なる）
   const names = (t) => [...body(t).matchAll(/<MidiClip[\s\S]*?<Name Value="([^"]*)"/g)].map((m) => m[1]);
@@ -146,15 +149,12 @@ test("クリップ名から作者名と DRY / WET を落とす", () => {
   assert.strictEqual(clipName("/x/1_Beautiful_Dm9-Am9_Niko_Kotoulas.mid"), "1_Beautiful_Dm9-Am9");
 });
 
-test("--instruments を付けたときだけ楽器チェーンが載る（#22・封印中）", () => {
-  // preset 形式のデバイスを置いた .als は Live が読み込み直後に落ちるため既定はオフ。
-  // 仕組み自体が壊れていないことだけを見ておく
+test("--no-instruments なら楽器を載せない（#22）", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "niko-"));
   fakeLibrary(root);
-  build({ libRoot: root, outRoot: out(root), sets: ["01"], instruments: true });
+  build({ libRoot: root, outRoot: out(root), sets: ["01"], instruments: false });
   const xml = readAls(setPath(root, "01_Ideas.als"));
   const tracks = listTracks(xml).filter((t) => t.tag === "MidiTrack");
-  const inst = (t) => (/<Devices>\s*<([A-Za-z][\w.]*)/.exec(xml.slice(t.start, t.end)) || [])[1] || "なし";
-  assert.deepStrictEqual(tracks.map(inst), ["OriginalSimpler", "Drift", "OriginalSimpler", "OriginalSimpler"]);
+  assert.deepStrictEqual(tracks.map((t) => /<Devices \/>/.test(xml.slice(t.start, t.end))), [true, true, true, true]);
   fs.rmSync(root, { recursive: true, force: true });
 });

@@ -377,3 +377,18 @@ test("値が一度も変わらない CC はエンベロープにしない（#19�
   // LockEnvelope は見ない。テンプレート（Live が書いた実物）で 66 は元から 1 になっている
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("プリセットから取り出した楽器チェーンに KeyMidi を残さない（#22）", () => {
+  // Live が書いたセットのデバイスには KeyMidi が無く、セット側のマッピング表にも登録が無い。
+  // 残したまま置くと、クリップに CC エンベロープがある場合に Live が落ちる
+  const { instrumentChain } = require("../../scripts/device-preset");
+  const CL = "/Applications/Ableton Live 12 Suite.app/Contents/App-Resources/Core Library/Racks/Instrument Racks";
+  const piano = path.join(CL, "Piano & Keys", "Ac Piano Upright.adg");
+  if (!fs.existsSync(piano)) return; // Live 未インストールの環境では飛ばす
+  const r = instrumentChain(piano);
+  assert.deepStrictEqual(r.names, ["OriginalSimpler", "ChannelEq", "Reverb"]);
+  assert.strictEqual(/<KeyMidi>/.test(r.xml), false);
+  // <Devices> に並べるので Id は 0,1,2 に振り直す
+  // 直下（タブ 7 個）に並ぶデバイスだけを見る
+  assert.deepStrictEqual([...r.xml.matchAll(/^\t{7}<[A-Za-z][\w.]* Id="(\d+)"/gm)].map((m) => m[1]), ["0", "1", "2"]);
+});

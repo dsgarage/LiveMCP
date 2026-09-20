@@ -49,6 +49,19 @@ function duplicatePointeeIds(xml) {
   return { dupes: bad, max, next: next ? Number(next[1]) : null };
 }
 
+// トラックの <MidiControllers> の中で ControllerTargets.<N> の Id が連番になっているか。
+// Live が書いたセットは必ず文書順の連番で、崩れているとトラックに楽器がある場合に落ちる
+function nonSequentialControllerTargets(xml) {
+  const bad = [];
+  for (const m of xml.matchAll(/<MidiControllers>([\s\S]*?)<\/MidiControllers>/g)) {
+    const ids = [...m[1].matchAll(/<ControllerTargets\.(\d+) Id="(\d+)"/g)].map((h) => [Number(h[1]), Number(h[2])]);
+    for (let i = 1; i < ids.length; i++) {
+      if (ids[i][1] !== ids[i - 1][1] + 1) { bad.push({ index: ids[i][0], id: ids[i][1], prev: ids[i - 1][1] }); break; }
+    }
+  }
+  return bad;
+}
+
 // 問題があれば throw する。組み立ての最後に通しておく
 function assertValid(xml, label = "") {
   const where = label ? `${label}: ` : "";
@@ -62,10 +75,15 @@ function assertValid(xml, label = "") {
   const p = duplicatePointeeIds(xml);
   if (p.dupes.length) throw new Error(`${where}ポインタ id が重複: Id="${p.dupes[0].id}"（他 ${p.dupes.length - 1} 件）`);
   if (p.next != null && p.max >= p.next) throw new Error(`${where}NextPointeeId(${p.next}) が使用済み id の最大(${p.max})を超えていない`);
+  const seq = nonSequentialControllerTargets(xml);
+  if (seq.length) {
+    const s0 = seq[0];
+    throw new Error(`${where}ControllerTargets の id が連番でない: .${s0.index} が ${s0.id}（直前は ${s0.prev}）。楽器を載せると Live が落ちる`);
+  }
   return true;
 }
 
-module.exports = { duplicateListIds, duplicatePointeeIds, assertValid };
+module.exports = { duplicateListIds, duplicatePointeeIds, nonSequentialControllerTargets, assertValid };
 
 if (require.main === module) {
   const files = process.argv.slice(2);
