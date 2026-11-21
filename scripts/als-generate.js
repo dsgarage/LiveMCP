@@ -168,6 +168,7 @@ function warpMarkers(seconds, beats, bpm) {
 }
 
 // opts.warpMode: 0 = Beats（既定）/ 4 = Complex。テンプレートの WarpMode だけを差し替える
+// opts.color: 数値ならクリップの色（Live の色番号）。無ければ LOOP_COLOR
 function audioClipSlot(index, file, alsDir, bpm, opts = {}) {
   const { info, meta } = file;
   const seconds = info.frames / info.sampleRate;
@@ -179,7 +180,7 @@ function audioClipSlot(index, file, alsDir, bpm, opts = {}) {
   return tpl("clip-slot-audio.xml")
     .replace(/__INDEX__/g, String(index))
     .replace(/__NAME__/g, escapeAttr(meta.stem))
-    .replace(/__COLOR__/g, String(LOOP_COLOR))
+    .replace(/__COLOR__/g, String(typeof opts.color === "number" ? opts.color : LOOP_COLOR))
     .replace(/__REL__/g, escapeAttr(relFrom(alsDir, file.path)))
     .replace(/__ABS__/g, escapeAttr(file.path))
     .replace(/__BYTES__/g, String(info.bytes))
@@ -198,7 +199,7 @@ function audioTrack({ id, name, color, files, scenes, alsDir, bpm, pid, warpMode
   // 拍数（= クリップ自身のテンポ）は必ずそのファイルの BPM で計算する。セットのテンポで計算すると
   // 155 BPM のループが「120 BPM の 6.2 拍」になり、Seg. BPM が名前と食い違って小節も合わなくなる。
   // BPM の分からないファイル（FX 等）だけセットのテンポ（原速で鳴る）
-  for (let i = 0; i < scenes; i++) slots.push(files[i] ? audioClipSlot(i, files[i], alsDir, files[i].meta.bpm || bpm, { warpMode }) : emptySlot(i));
+  for (let i = 0; i < scenes; i++) slots.push(files[i] ? audioClipSlot(i, files[i], alsDir, files[i].meta.bpm || bpm, { warpMode, color: files[i].color }) : emptySlot(i));
   const freeze = [];
   for (let i = 0; i < scenes; i++) freeze.push(emptySlot(i));
   const block = tpl("audio-track.xml")

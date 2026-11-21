@@ -8,6 +8,7 @@
 //   トラック … 1 製品 1 本のオーディオトラック（manifest の出てきた順）
 //   クリップ … 製品内は manifest の順に縦へ並べる。ループ ON、自分の BPM のワープマーカー付き
 //   テンポ   … セットは 120。クリップのテンポ表示は、各クリップの拍数（自分の BPM で計算）で決まる
+//   クリップの色 … clipName の先頭の語（パート）で決める。パートが読めない録音物（` | ` 形式）はトラックの色
 //   WarpMode … warp が "complex" の製品は 4（Complex）、それ以外は 0（Beats）
 // WAV は出力先の Samples/ にある前提で、相対パスと絶対パスの両方を書く（持ち運べる）。
 "use strict";
@@ -25,6 +26,42 @@ const CATEGORIES = ["01_Loops", "02_KeysSynth", "03_Rhythm", "04_Other"];
 const SET_TEMPO = 120;
 const MIN_SCENES = 8;
 const WARP_MODE = { beats: 0, complex: 4 };
+
+// ---- クリップの色 ----
+
+// 役割（clipName の先頭の語）→ Live の色番号。見分けやすいよう色相の離れた番号を選ぶ（Live の色番号 0〜69 は 14 色相 × 5 段）。
+// リポジトリ内に色番号の資料は無い。番号は Live で目視して決めた値ではない（要確認）
+const PART_GROUPS = [
+  [1, ["drums", "kick", "snare", "clap", "hihat", "hat", "perc", "shaker", "percussion", "cymbals", "crash", "tom", "top"]],
+  [9, ["bass", "sub", "808"]],
+  [4, ["keys", "piano", "rhodes", "organ", "ep"]],
+  [2, ["guitar"]],
+  [12, ["synth", "arp", "arpeggio", "lead", "pluck", "bells", "bell", "blip", "hit"]],
+  [6, ["pad", "string", "strings", "brass", "flute", "horn", "sax"]],
+  [13, ["vox", "vocal", "choir"]],
+  [7, ["fx", "sweep", "riser", "noise", "texture"]],
+  [0, ["full", "mix"]],
+];
+const PART_COLOR = new Map(PART_GROUPS.flatMap(([c, words]) => words.map((w) => [w, c])));
+// 対応表に無い語は、語の文字列から決まる色。対応表の色と重ならない番号から選ぶ
+const FALLBACK_COLORS = [3, 5, 8, 10, 17, 19, 22, 24];
+
+// clipName の先頭の語を小文字で返す。録音した音源（<パッチ> | <フレーズ> | <BPM>BPM、` | ` が 2 つ以上）は役割を読み取れないので null。
+// 同梱ループ（<元の名前> | <BPM>BPM、` | ` が 1 つ）は先頭の語がパート
+function partOf(clipName) {
+  if ((String(clipName).match(/ \| /g) || []).length >= 2) return null;
+  const word = String(clipName).trim().split(/[\[\s|]/)[0].toLowerCase();
+  return word || null;
+}
+
+function clipColor(clipName, trackColor) {
+  const part = partOf(clipName);
+  if (!part) return trackColor;
+  if (PART_COLOR.has(part)) return PART_COLOR.get(part);
+  let h = 0;
+  for (const ch of part) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+  return FALLBACK_COLORS[h % FALLBACK_COLORS.length];
+}
 
 // ---- manifest の読み込み ----
 
@@ -61,15 +98,16 @@ function buildSet({ output, name, products }) {
   let trackId = Math.max(...als.listTracks(xml).map((t) => t.id), 10) + 1;
   let clips = 0;
   const blocks = [...products.entries()].map(([product, list], i) => {
+    const trackColor = (i * 7) % 60;
     const warps = new Set(list.map((it) => it.warp));
     if (warps.size > 1) throw new Error(`${product}: 1 製品の中で warp が混在しています（${[...warps].join(" / ")}）`);
     const files = list.map((it) => {
       const info = audioInfo(it.abs);
       if (!info) throw new Error(`WAV のヘッダを読めません: ${it.abs}`);
-      return { path: it.abs, meta: { stem: it.clipName, bpm: it.bpm }, info };
+      return { path: it.abs, meta: { stem: it.clipName, bpm: it.bpm }, info, color: clipColor(it.clipName, trackColor) };
     });
     clips += files.length;
-    return audioTrack({ id: trackId++, name: product, color: (i * 7) % 60, files, scenes, alsDir, bpm: SET_TEMPO, pid, warpMode: WARP_MODE[list[0].warp] });
+    return audioTrack({ id: trackId++, name: product, color: trackColor, files, scenes, alsDir, bpm: SET_TEMPO, pid, warpMode: WARP_MODE[list[0].warp] });
   });
 
   const firstReturn = als.listTracks(xml).find((t) => t.tag === "ReturnTrack");
@@ -116,7 +154,7 @@ function build({ manifestPath, outDir, sets, force = false, dryRun = false }) {
   return results;
 }
 
-module.exports = { build };
+module.exports = { build, partOf, clipColor };
 
 if (require.main === module) {
   const argv = process.argv.slice(2);
