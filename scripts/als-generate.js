@@ -167,7 +167,8 @@ function warpMarkers(seconds, beats, bpm) {
   return lines.map((l) => "\t".repeat(12) + l).join("\n");
 }
 
-function audioClipSlot(index, file, alsDir, bpm) {
+// opts.warpMode: 0 = Beats（既定）/ 4 = Complex。テンプレートの WarpMode だけを差し替える
+function audioClipSlot(index, file, alsDir, bpm, opts = {}) {
   const { info, meta } = file;
   const seconds = info.frames / info.sampleRate;
   // 拍数: 1/4 拍の格子に十分近ければ格子に載せる（ループはほぼ小節単位。実物: 12.387s @155 = 32.0 拍）。
@@ -186,17 +187,18 @@ function audioClipSlot(index, file, alsDir, bpm) {
     .replace(/__FRAMES__/g, String(info.frames))
     .replace(/__RATE__/g, String(info.sampleRate))
     .replace(/__BEATS__/g, String(beats))
-    .replace(/__WARP__/, warpMarkers(seconds, beats, bpm));
+    .replace(/__WARP__/, warpMarkers(seconds, beats, bpm))
+    .replace('<WarpMode Value="0" />', `<WarpMode Value="${opts.warpMode ?? 0}" />`);
 }
 
 const emptySlot = (index) => tpl("clip-slot-empty.xml").replace(/__INDEX__/g, String(index));
 
-function audioTrack({ id, name, color, files, scenes, alsDir, bpm, pid }) {
+function audioTrack({ id, name, color, files, scenes, alsDir, bpm, pid, warpMode = 0 }) {
   const slots = [];
   // 拍数（= クリップ自身のテンポ）は必ずそのファイルの BPM で計算する。セットのテンポで計算すると
   // 155 BPM のループが「120 BPM の 6.2 拍」になり、Seg. BPM が名前と食い違って小節も合わなくなる。
   // BPM の分からないファイル（FX 等）だけセットのテンポ（原速で鳴る）
-  for (let i = 0; i < scenes; i++) slots.push(files[i] ? audioClipSlot(i, files[i], alsDir, files[i].meta.bpm || bpm) : emptySlot(i));
+  for (let i = 0; i < scenes; i++) slots.push(files[i] ? audioClipSlot(i, files[i], alsDir, files[i].meta.bpm || bpm, { warpMode }) : emptySlot(i));
   const freeze = [];
   for (let i = 0; i < scenes; i++) freeze.push(emptySlot(i));
   const block = tpl("audio-track.xml")
@@ -678,7 +680,7 @@ function generate({ packDir, output, loops = [], oneshots = [], name, baseSet = 
   };
 }
 
-module.exports = { generate, collect, collectSongs, roleAndSong, orderRoles, trackNameOf, audioClipSlot, drumBranch, midiClipSlot, midiTrack, emptySlot, deviceChain, scenesBlock, makePidAllocator, envelopesXml, ccPlaceholder };
+module.exports = { generate, collect, collectSongs, roleAndSong, orderRoles, trackNameOf, audioTrack, audioClipSlot, drumBranch, midiClipSlot, midiTrack, emptySlot, deviceChain, scenesBlock, makePidAllocator, envelopesXml, ccPlaceholder };
 
 if (require.main === module) {
   const argv = process.argv.slice(2);
